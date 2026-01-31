@@ -3,6 +3,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { generateResponse, type ConversationMessage } from "./lib/ai";
 import { sendMessage, sendChatAction, setWebhook } from "./lib/telegramApi";
+import { requireEnv } from "./lib/env";
 
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant in a Telegram group chat.
 Keep responses concise and conversational — this is a chat, not an essay.
@@ -19,9 +20,9 @@ export const processMessage = internalAction({
     messageId: v.number(),
   },
   handler: async (ctx, args) => {
-    const token = process.env.TELEGRAM_BOT_TOKEN!;
+    const token = requireEnv("TELEGRAM_BOT_TOKEN");
     const aiProvider = process.env.AI_PROVIDER ?? "claude";
-    const aiApiKey = process.env.AI_API_KEY!;
+    const aiApiKey = requireEnv("AI_API_KEY");
     const aiModel =
       process.env.AI_MODEL ??
       (aiProvider === "claude" ? "claude-sonnet-4-20250514" : "gpt-4o");
@@ -41,15 +42,14 @@ export const processMessage = internalAction({
         limit: maxContext,
       });
 
-      const conversation: ConversationMessage[] = recentMessages.map(
-        (msg: any) => ({
-          role: msg.role,
-          content:
-            msg.role === "user"
-              ? `[${msg.userName ?? "Unknown"}]: ${msg.text}`
-              : msg.text,
-        }),
-      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const conversation: ConversationMessage[] = recentMessages.map((msg: any) => ({
+        role: msg.role as "user" | "assistant",
+        content:
+          msg.role === "user"
+            ? `[${String(msg.userName ?? "Unknown")}]: ${String(msg.text)}`
+            : String(msg.text),
+      }));
 
       const aiResponse = await generateResponse(
         aiProvider,
@@ -73,7 +73,7 @@ export const processMessage = internalAction({
       await sendMessage(token, args.chatId, responseText, {
         replyToMessageId: args.messageId,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error processing message:", error);
 
       await sendMessage(
@@ -89,9 +89,9 @@ export const processMessage = internalAction({
 export const registerWebhook = action({
   args: {},
   handler: async () => {
-    const token = process.env.TELEGRAM_BOT_TOKEN!;
-    const secret = process.env.TELEGRAM_WEBHOOK_SECRET!;
-    const convexUrl = process.env.CONVEX_SITE_URL!;
+    const token = requireEnv("TELEGRAM_BOT_TOKEN");
+    const secret = requireEnv("TELEGRAM_WEBHOOK_SECRET");
+    const convexUrl = requireEnv("CONVEX_SITE_URL");
     const webhookUrl = `${convexUrl}/api/telegram-webhook`;
 
     const result = await setWebhook(token, webhookUrl, secret);

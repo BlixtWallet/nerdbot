@@ -1,106 +1,83 @@
+# Nerdbot
 
-Default to using Bun instead of Node.js.
+Telegram AI bot running on Convex. Uses raw fetch for Telegram Bot API, supports Claude and OpenAI as AI providers.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
+## Tooling
 
-## APIs
+Default to Bun instead of Node.js.
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+- `bun install` instead of npm/yarn/pnpm install
+- `bunx <package>` instead of npx
+- `bun run <script>` instead of npm run
 
-## Testing
+## Project Structure
 
-Use `bun test` to run tests.
-
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
+```
+convex/
+  schema.ts          - Database schema (messages, chats, rateLimits)
+  http.ts            - HTTP webhook endpoint (POST /api/telegram-webhook)
+  telegram.ts        - Core bot logic (processMessage action, registerWebhook)
+  messages.ts        - Internal mutations/queries for message storage
+  lib/
+    ai.ts            - AI provider abstraction (Claude + OpenAI)
+    telegramApi.ts   - Telegram Bot API helpers (sendMessage, sendChatAction, setWebhook)
+    env.ts           - Environment variable helper (requireEnv)
 ```
 
-## Frontend
+## Scripts
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+| Script | Command | Description |
+|--------|---------|-------------|
+| `dev` | `bun run dev` | Start Convex dev server with hot reload |
+| `deploy` | `bun run deploy` | Deploy to production |
+| `register-webhook` | `bun run register-webhook` | Register webhook URL with Telegram |
+| `lint` | `bun run lint` | Run ESLint on convex/ |
+| `lint:fix` | `bun run lint:fix` | Auto-fix lint issues |
+| `format` | `bun run format` | Format code with Prettier |
+| `format:check` | `bun run format:check` | Check formatting without writing |
+| `typecheck` | `bun run typecheck` | Run TypeScript type checking |
 
-Server:
+## Linting & Formatting
 
-```ts#index.ts
-import index from "./index.html"
+- ESLint with `typescript-eslint` strict type-checked config
+- Prettier for formatting (semi, double quotes, trailing commas, 90 char width)
+- `no-explicit-any` is a warning (needed for untyped Telegram/AI API responses)
+- `no-unsafe-*` rules are off (Convex generated types trigger false positives)
+- Always run `bun run lint` and `bun run format:check` before committing
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
+## Environment Variables
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+Set via `bunx convex env set <KEY> <VALUE>`:
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+| Variable | Description |
+|----------|-------------|
+| `TELEGRAM_BOT_TOKEN` | From BotFather |
+| `TELEGRAM_WEBHOOK_SECRET` | Random string for webhook validation |
+| `AI_PROVIDER` | `"claude"` or `"openai"` |
+| `AI_API_KEY` | Claude or OpenAI API key |
+| `AI_MODEL` | e.g. `"claude-sonnet-4-20250514"` or `"gpt-4o"` |
+| `BOT_USERNAME` | `nerdbot` (without @) |
 
-With the following `frontend.tsx`:
+## Key Design Decisions
 
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
+- **Async processing**: Webhook returns 200 immediately, AI work is scheduled via `ctx.scheduler.runAfter(0, ...)`. Prevents Telegram retry storms.
+- **All messages stored**: Even messages the bot doesn't respond to are stored for conversation context.
+- **Internal functions**: All mutations/queries called by the bot are internal (not exposed publicly).
+- **Rate limiting**: Per-user, per-group, 10 requests/minute sliding window.
 
-// import .css files directly and it works
-import './index.css';
+## Bot Commands
 
-const root = createRoot(document.body);
+| Command | Description |
+|---------|-------------|
+| `/help` | Show help message |
+| `/reset` | Clear conversation history for the chat |
+| `/setprompt <text>` | Set a custom system prompt for the chat |
 
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
+## Bot Trigger Conditions
 
-root.render(<Frontend />);
-```
+In groups, the bot responds when:
+- Mentioned with `@nerdbot`
+- Message is a reply to the bot's message
+- Message is a `/` command
 
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
-```
-
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+In private chats, the bot always responds.

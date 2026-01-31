@@ -3,8 +3,24 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "bunx convex dev",
+    "deploy": "bunx convex deploy",
+    "register-webhook": "bunx convex run telegram:registerWebhook",
+    "lint": "eslint convex/",
+    "lint:fix": "eslint convex/ --fix",
+    "format": "prettier --write convex/",
+    "format:check": "prettier --check convex/",
+    "typecheck": "tsc --noEmit"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@eslint/js": "^9.39.2",
+    "@types/bun": "latest",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "prettier": "^3.8.1",
+    "typescript-eslint": "^8.54.0"
   },
   "peerDependencies": {
     "typescript": "^5"

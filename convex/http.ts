@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendMessage } from "./lib/telegramApi";
+import { requireEnv } from "./lib/env";
 
 const http = httpRouter();
 
@@ -11,15 +12,14 @@ http.route({
   handler: httpAction(async (ctx, request) => {
     // 1. Validate the webhook secret
     const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-    const headerSecret = request.headers.get(
-      "x-telegram-bot-api-secret-token",
-    );
+    const headerSecret = request.headers.get("x-telegram-bot-api-secret-token");
 
     if (secret && headerSecret !== secret) {
       return new Response("Unauthorized", { status: 401 });
     }
 
     // 2. Parse the Telegram update
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let update: any;
     try {
       update = await request.json();
@@ -35,23 +35,21 @@ http.route({
     const chatId: number = message.chat.id;
     const userId: number = message.from.id;
     const userName: string =
-      message.from.first_name +
-      (message.from.last_name ? ` ${message.from.last_name}` : "");
+      String(message.from.first_name) +
+      (message.from.last_name ? ` ${String(message.from.last_name)}` : "");
     const messageText: string = message.text;
     const messageId: number = message.message_id;
     const chatTitle: string | undefined = message.chat.title;
     const botUsername = process.env.BOT_USERNAME ?? "";
-    const token = process.env.TELEGRAM_BOT_TOKEN!;
+    const token = requireEnv("TELEGRAM_BOT_TOKEN");
 
     // 3. Determine if the bot should respond
     const isPrivateChat = message.chat.type === "private";
     const isMentioned = messageText.includes(`@${botUsername}`);
-    const isReplyToBot =
-      message.reply_to_message?.from?.username === botUsername;
+    const isReplyToBot = message.reply_to_message?.from?.username === botUsername;
     const isCommand = messageText.startsWith("/");
 
-    const shouldRespond =
-      isPrivateChat || isMentioned || isReplyToBot || isCommand;
+    const shouldRespond = isPrivateChat || isMentioned || isReplyToBot || isCommand;
 
     if (!shouldRespond) {
       // Store message for context but don't respond
@@ -74,9 +72,7 @@ http.route({
         await sendMessage(
           token,
           chatId,
-          "Hi! I'm an AI assistant. Mention me with @" +
-            botUsername +
-            " or reply to my messages to chat.\n\n" +
+          `Hi! I'm an AI assistant. Mention me with @${botUsername} or reply to my messages to chat.\n\n` +
             "Commands:\n" +
             "/help — Show this message\n" +
             "/reset — Clear conversation history\n" +
@@ -94,11 +90,7 @@ http.route({
       if (command === "/setprompt") {
         const newPrompt = messageText.replace(/^\/setprompt(@\w+)?\s*/, "");
         if (!newPrompt) {
-          await sendMessage(
-            token,
-            chatId,
-            "Usage: /setprompt Your custom prompt here",
-          );
+          await sendMessage(token, chatId, "Usage: /setprompt Your custom prompt here");
           return new Response("OK", { status: 200 });
         }
         await ctx.runMutation(internal.messages.ensureChat, {
