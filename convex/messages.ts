@@ -1,5 +1,6 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { evaluateRateLimit } from "./lib/helpers";
 
 export const store = internalMutation({
   args: {
@@ -82,7 +83,6 @@ export const checkRateLimit = internalMutation({
   handler: async (ctx, args) => {
     const maxPerMinute = args.maxPerMinute ?? 10;
     const now = Date.now();
-    const windowMs = 60_000;
 
     const existing = await ctx.db
       .query("rateLimits")
@@ -91,32 +91,23 @@ export const checkRateLimit = internalMutation({
       )
       .unique();
 
-    if (!existing) {
+    const result = evaluateRateLimit(
+      existing ? { windowStart: existing.windowStart, count: existing.count } : null,
+      now,
+      maxPerMinute,
+    );
+
+    if (result.insert) {
       await ctx.db.insert("rateLimits", {
         chatId: args.chatId,
         userId: args.userId,
-        windowStart: now,
-        count: 1,
+        ...result.insert,
       });
-      return true;
+    } else if (result.update && existing) {
+      await ctx.db.patch("rateLimits", existing._id, result.update);
     }
 
-    if (now - existing.windowStart > windowMs) {
-      await ctx.db.patch("rateLimits", existing._id, {
-        windowStart: now,
-        count: 1,
-      });
-      return true;
-    }
-
-    if (existing.count >= maxPerMinute) {
-      return false;
-    }
-
-    await ctx.db.patch("rateLimits", existing._id, {
-      count: existing.count + 1,
-    });
-    return true;
+    return result.allowed;
   },
 });
 

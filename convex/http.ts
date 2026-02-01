@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendMessage } from "./lib/telegramApi";
 import { requireEnv } from "./lib/env";
+import { shouldRespond, parseCommand, stripMention, buildUserName } from "./lib/helpers";
 
 interface TelegramUpdate {
   message?: {
@@ -43,9 +44,7 @@ http.route({
 
     const chatId = message.chat.id;
     const userId = message.from.id;
-    const userName =
-      message.from.first_name +
-      (message.from.last_name ? ` ${message.from.last_name}` : "");
+    const userName = buildUserName(message.from.first_name, message.from.last_name);
     const messageText = message.text;
     const messageId = message.message_id;
     const chatTitle = message.chat.title;
@@ -55,13 +54,7 @@ http.route({
 
     // 3. Determine if the bot should respond
     // In groups: only @mention or /commands. No reply-to-bot trigger.
-    const isPrivateChat = message.chat.type === "private";
-    const isMentioned = messageText.includes(`@${botUsername}`);
-    const isCommand = messageText.startsWith("/");
-
-    const shouldRespond = isPrivateChat || isMentioned || isCommand;
-
-    if (!shouldRespond) {
+    if (!shouldRespond(message.chat.type, messageText, botUsername)) {
       // Store message for context but don't respond
       await ctx.runMutation(internal.messages.store, {
         chatId,
@@ -75,8 +68,8 @@ http.route({
     }
 
     // 4. Handle commands
-    if (isCommand) {
-      const command = messageText.split(" ")[0]?.split("@")[0];
+    if (messageText.startsWith("/")) {
+      const command = parseCommand(messageText);
 
       if (command === "/start" || command === "/help") {
         await sendMessage(
@@ -118,9 +111,7 @@ http.route({
     }
 
     // 6. Store user message (strip @mention)
-    const cleanText = messageText
-      .replace(new RegExp(`@${botUsername}\\b`, "gi"), "")
-      .trim();
+    const cleanText = stripMention(messageText, botUsername);
 
     await ctx.runMutation(internal.messages.store, {
       chatId,

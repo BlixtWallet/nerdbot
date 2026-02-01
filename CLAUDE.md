@@ -23,6 +23,12 @@ convex/
     ai.ts            - AI provider abstraction (Moonshot, Claude, OpenAI)
     telegramApi.ts   - Telegram Bot API helpers (sendMessage, sendChatAction, setWebhook)
     env.ts           - Environment variable helper (requireEnv)
+    helpers.ts       - Pure logic extracted for testability (rate limiting, trigger logic, etc.)
+tests/
+  env.test.ts        - Tests for requireEnv
+  ai.test.ts         - Tests for AI provider abstraction
+  telegramApi.test.ts - Tests for Telegram API helpers
+  helpers.test.ts    - Tests for rate limiting, trigger logic, command parsing, etc.
 ```
 
 ## Scripts
@@ -32,19 +38,28 @@ convex/
 | `dev` | `bun run dev` | Start Convex dev server with hot reload |
 | `deploy` | `bun run deploy` | Deploy to production |
 | `register-webhook` | `bun run register-webhook` | Register webhook URL with Telegram |
-| `lint` | `bun run lint` | Run ESLint on convex/ |
+| `lint` | `bun run lint` | Run ESLint on convex/ and tests/ |
 | `lint:fix` | `bun run lint:fix` | Auto-fix lint issues |
 | `format` | `bun run format` | Format code with Prettier |
 | `format:check` | `bun run format:check` | Check formatting without writing |
+| `test` | `bun test` | Run all unit tests |
 | `typecheck` | `bun run typecheck` | Run TypeScript type checking |
 
 ## Linting & Formatting
 
-- ESLint with `typescript-eslint` strict type-checked config
+- ESLint with `typescript-eslint` strict type-checked config + `@convex-dev/eslint-plugin`
 - Prettier for formatting (semi, double quotes, trailing commas, 90 char width)
-- `no-explicit-any` is a warning (needed for untyped Telegram/AI API responses)
+- `no-explicit-any` is an error — no `any` in the codebase, use typed interfaces instead
 - `no-unsafe-*` rules are off (Convex generated types trigger false positives)
 - Always run `bun run lint` and `bun run format:check` before committing
+
+## Testing
+
+- Tests live in `tests/` at the project root, run with `bun test`
+- Pure logic is extracted into `convex/lib/helpers.ts` so it can be unit tested without a Convex backend
+- Test files import source via relative paths (e.g. `../convex/lib/ai`)
+- Tests mock `globalThis.fetch` for HTTP-dependent code (AI providers, Telegram API)
+- Key areas covered: rate limiting, bot trigger logic, command parsing, mention stripping, response truncation, conversation formatting, all AI providers, Telegram API calls, env helpers
 
 ## Environment Variables
 

@@ -12,6 +12,7 @@ import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as lib_ai from "../lib/ai.js";
 import type * as lib_env from "../lib/env.js";
+import type * as lib_helpers from "../lib/helpers.js";
 import type * as lib_telegramApi from "../lib/telegramApi.js";
 import type * as messages from "../messages.js";
 import type * as telegram from "../telegram.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   "lib/ai": typeof lib_ai;
   "lib/env": typeof lib_env;
+  "lib/helpers": typeof lib_helpers;
   "lib/telegramApi": typeof lib_telegramApi;
   messages: typeof messages;
   telegram: typeof telegram;

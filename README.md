@@ -54,6 +54,14 @@ bunx convex run telegram:registerWebhook
 bunx convex dev
 ```
 
+## Testing
+
+```bash
+bun test
+```
+
+Tests are in `tests/` and cover rate limiting, bot trigger logic, command parsing, mention stripping, response truncation, conversation formatting, AI providers, and Telegram API calls.
+
 ## Deploy
 
 ```bash

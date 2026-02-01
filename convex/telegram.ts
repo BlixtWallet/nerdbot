@@ -1,9 +1,10 @@
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { generateResponse, type ConversationMessage } from "./lib/ai";
+import { generateResponse } from "./lib/ai";
 import { sendMessage, sendChatAction, setWebhook } from "./lib/telegramApi";
 import { requireEnv } from "./lib/env";
+import { formatConversation, truncateResponse } from "./lib/helpers";
 
 const DEFAULT_SYSTEM_PROMPT = `You are Nerdbot, the resident AI in a Telegram group of tech-savvy nerds.
 You're witty, sharp, and love banter. Keep it casual and concise — no essays.
@@ -44,11 +45,7 @@ export const processMessage = internalAction({
         limit: maxContext,
       });
 
-      const conversation: ConversationMessage[] = recentMessages.map((msg) => ({
-        role: msg.role,
-        content:
-          msg.role === "user" ? `[${msg.userName ?? "Unknown"}]: ${msg.text}` : msg.text,
-      }));
+      const conversation = formatConversation(recentMessages);
 
       const aiResponse = await generateResponse(
         aiProvider,
@@ -58,10 +55,7 @@ export const processMessage = internalAction({
         conversation,
       );
 
-      let responseText = aiResponse.text;
-      if (responseText.length > 4000) {
-        responseText = responseText.slice(0, 4000) + "\n\n[truncated]";
-      }
+      const responseText = truncateResponse(aiResponse.text);
 
       await ctx.runMutation(internal.messages.store, {
         chatId: args.chatId,
