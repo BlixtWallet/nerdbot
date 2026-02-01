@@ -60,13 +60,14 @@ http.route({
     const token = requireEnv("TELEGRAM_BOT_TOKEN");
 
     // 3. Check allowlists
-    if (!isAllowedUser(userId, process.env.ALLOWED_USER_IDS ?? "")) {
-      console.warn(
-        `[BLOCKED] User not allowed — userId: ${userId}, name: ${userName}, chat: ${chatId} (${message.chat.type})`,
-      );
+    // In private chats: user must be in ALLOWED_USER_IDS
+    // In groups: group must be in ALLOWED_GROUP_IDS (all members can interact)
+    const isPrivate = message.chat.type === "private";
+    if (isPrivate && !isAllowedUser(userId, process.env.ALLOWED_USER_IDS ?? "")) {
+      console.warn(`[BLOCKED] User not allowed — userId: ${userId}, name: ${userName}`);
       return new Response("OK", { status: 200 });
     }
-    if (!isAllowedChat(chatId, message.chat.type, process.env.ALLOWED_GROUP_IDS ?? "")) {
+    if (!isPrivate && !isAllowedChat(chatId, process.env.ALLOWED_GROUP_IDS ?? "")) {
       console.warn(
         `[BLOCKED] Group not allowed — chatId: ${chatId}, title: ${chatTitle ?? "unknown"}, userId: ${userId}`,
       );

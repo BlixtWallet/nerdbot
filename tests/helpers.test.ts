@@ -73,28 +73,20 @@ describe("isAllowedUser", () => {
 });
 
 describe("isAllowedChat", () => {
-  test("always allows private chats", () => {
-    expect(isAllowedChat(12345, "private", "")).toBe(true);
-  });
-
-  test("blocks groups when allowlist is empty", () => {
-    expect(isAllowedChat(-100123, "group", "")).toBe(false);
-  });
-
-  test("blocks supergroups when allowlist is empty", () => {
-    expect(isAllowedChat(-100123, "supergroup", "")).toBe(false);
+  test("blocks when allowlist is empty", () => {
+    expect(isAllowedChat(-100123, "")).toBe(false);
   });
 
   test("allows group in allowlist", () => {
-    expect(isAllowedChat(-100123, "group", "-100123,-100456")).toBe(true);
+    expect(isAllowedChat(-100123, "-100123,-100456")).toBe(true);
   });
 
   test("blocks group not in allowlist", () => {
-    expect(isAllowedChat(-100999, "group", "-100123,-100456")).toBe(false);
+    expect(isAllowedChat(-100999, "-100123,-100456")).toBe(false);
   });
 
   test("handles whitespace in allowlist", () => {
-    expect(isAllowedChat(-100123, "supergroup", "-100123, -100456")).toBe(true);
+    expect(isAllowedChat(-100123, "-100123, -100456")).toBe(true);
   });
 });
 
