@@ -10,6 +10,7 @@ import {
   parseCommand,
   stripMention,
   buildUserName,
+  formatReplyContext,
 } from "./lib/helpers";
 import { createLogger } from "./lib/logger";
 
@@ -20,7 +21,10 @@ interface TelegramUpdate {
     text?: string;
     message_id: number;
     message_thread_id?: number;
-    reply_to_message?: { from?: { id: number; is_bot?: boolean } };
+    reply_to_message?: {
+      from?: { id: number; first_name: string; last_name?: string; is_bot?: boolean };
+      text?: string;
+    };
   };
 }
 
@@ -61,6 +65,17 @@ http.route({
     const botUsername = process.env.BOT_USERNAME ?? "";
     const token = requireEnv("TELEGRAM_BOT_TOKEN");
 
+    // Compute reply context once (used in both storage paths)
+    const replyMsg = message.reply_to_message;
+    const replyContext = replyMsg?.text
+      ? formatReplyContext(
+          replyMsg.from
+            ? buildUserName(replyMsg.from.first_name, replyMsg.from.last_name)
+            : "Unknown",
+          replyMsg.text,
+        )
+      : "";
+
     const log = createLogger("webhook")
       .set("chatId", chatId)
       .set("userId", userId)
@@ -94,7 +109,7 @@ http.route({
         userId,
         userName,
         role: "user" as const,
-        text: messageText,
+        text: replyContext + messageText,
         telegramMessageId: messageId,
       });
       return new Response("OK", { status: 200 });
@@ -143,8 +158,8 @@ http.route({
       return new Response("OK", { status: 200 });
     }
 
-    // 6. Store user message (strip @mention)
-    const cleanText = stripMention(messageText, botUsername);
+    // 6. Store user message (strip @mention, prepend reply context)
+    const cleanText = replyContext + stripMention(messageText, botUsername);
 
     await ctx.runMutation(internal.messages.store, {
       chatId,

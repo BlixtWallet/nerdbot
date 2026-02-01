@@ -34,6 +34,18 @@ export function buildUserName(firstName: string, lastName?: string): string {
   return firstName + (lastName ? ` ${lastName}` : "");
 }
 
+export function formatReplyContext(
+  replyUserName: string,
+  replyText: string,
+  maxQuoteLength = 200,
+): string {
+  const truncated =
+    replyText.length > maxQuoteLength
+      ? replyText.slice(0, maxQuoteLength) + "..."
+      : replyText;
+  return `[Replying to ${replyUserName}: "${truncated}"]\n`;
+}
+
 export function stripCitations(text: string): string {
   return text
     .replace(/\[\[\d+\]\]\([^)]*\)/g, "")

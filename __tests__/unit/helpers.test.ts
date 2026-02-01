@@ -6,6 +6,7 @@ import {
   parseCommand,
   stripMention,
   buildUserName,
+  formatReplyContext,
   stripCitations,
   truncateResponse,
   formatConversation,
@@ -406,5 +407,38 @@ describe("validateSystemPrompt", () => {
 
   test("accepts prompt with short sk- that is not a key", () => {
     expect(validateSystemPrompt("I like to sk-ip rocks")).toBeNull();
+  });
+});
+
+describe("formatReplyContext", () => {
+  test("formats basic reply context", () => {
+    expect(formatReplyContext("Alice", "hello world")).toBe(
+      '[Replying to Alice: "hello world"]\n',
+    );
+  });
+
+  test("truncates long text at default 200 chars", () => {
+    const longText = "a".repeat(250);
+    const result = formatReplyContext("Bob", longText);
+    expect(result).toBe(`[Replying to Bob: "${"a".repeat(200)}..."]\n`);
+  });
+
+  test("does not truncate text at exactly 200 chars", () => {
+    const exactText = "b".repeat(200);
+    const result = formatReplyContext("Carol", exactText);
+    expect(result).toBe(`[Replying to Carol: "${"b".repeat(200)}"]\n`);
+  });
+
+  test("respects custom maxQuoteLength", () => {
+    const result = formatReplyContext("Dave", "hello world", 5);
+    expect(result).toBe('[Replying to Dave: "hello..."]\n');
+  });
+
+  test("handles multi-word user names", () => {
+    expect(formatReplyContext("John Doe", "hi")).toBe('[Replying to John Doe: "hi"]\n');
+  });
+
+  test("handles single character text", () => {
+    expect(formatReplyContext("Frank", "?")).toBe('[Replying to Frank: "?"]\n');
   });
 });

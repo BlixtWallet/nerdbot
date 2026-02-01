@@ -367,3 +367,173 @@ describe("webhook: message processing flow", () => {
     expect(messages).toHaveLength(1);
   });
 });
+
+describe("webhook: reply-to-message context", () => {
+  it("prepends reply context when replying to a message with text", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "@nerdbot fact check",
+          reply_to_message: {
+            from: { id: 5, first_name: "Bob", is_bot: false },
+            text: "BTC around $77,660 USD right now",
+          },
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe(
+      '[Replying to Bob: "BTC around $77,660 USD right now"]\nfact check',
+    );
+  });
+
+  it("stores reply context even when bot does not respond", async () => {
+    const t = convexTest(schema, modules);
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "that's interesting",
+          reply_to_message: {
+            from: { id: 5, first_name: "Bob", is_bot: false },
+            text: "some earlier message",
+          },
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe(
+      '[Replying to Bob: "some earlier message"]\nthat\'s interesting',
+    );
+  });
+
+  it("skips reply context when reply_to_message has no text", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "@nerdbot what is this?",
+          reply_to_message: {
+            from: { id: 5, first_name: "Bob", is_bot: false },
+          },
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe("what is this?");
+  });
+
+  it("uses Unknown when reply_to_message.from is undefined", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "@nerdbot explain",
+          reply_to_message: {
+            text: "some channel message",
+          },
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe(
+      '[Replying to Unknown: "some channel message"]\nexplain',
+    );
+  });
+
+  it("includes last name in reply context when available", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "@nerdbot agreed",
+          reply_to_message: {
+            from: { id: 5, first_name: "Bob", last_name: "Smith", is_bot: false },
+            text: "hot take here",
+          },
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toContain('[Replying to Bob Smith: "hot take here"]');
+  });
+
+  it("handles reply to bot's own message", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "tell me more",
+          reply_to_message: {
+            from: { id: 999, first_name: "Nerdbot", is_bot: true },
+            text: "BTC is a cryptocurrency...",
+          },
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe(
+      '[Replying to Nerdbot: "BTC is a cryptocurrency..."]\ntell me more',
+    );
+  });
+
+  it("truncates very long replied-to text", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    const longText = "x".repeat(500);
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "@nerdbot tldr",
+          reply_to_message: {
+            from: { id: 5, first_name: "Bob", is_bot: false },
+            text: longText,
+          },
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toContain("x".repeat(200) + '..."');
+    expect(messages[0]!.text).toContain("tldr");
+  });
+});
