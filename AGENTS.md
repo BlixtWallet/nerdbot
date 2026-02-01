@@ -31,8 +31,8 @@ __tests__/
     env.test.ts        - Tests for requireEnv (bun:test)
     ai.test.ts         - Tests for AI provider abstraction (bun:test)
     telegramApi.test.ts - Tests for Telegram API helpers (bun:test)
-    github.test.ts     - Tests for GitHub API helper (bun:test)
     helpers.test.ts    - Tests for rate limiting, trigger logic, command parsing, etc. (bun:test)
+    github.test.ts     - Tests for GitHub API helper (bun:test)
     logger.test.ts     - Tests for structured logger (bun:test)
   convex/
     test.setup.ts      - Vitest module glob for convex-test
@@ -94,6 +94,7 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 | `RATE_LIMIT_PER_MINUTE`   | Max messages per user per group per minute (default: `10`)                                                                                                                             |
 | `ALLOWED_USER_IDS`        | Comma-separated Telegram user IDs allowed to use the bot. **Required** — bot blocks everyone if not set                                                                                |
 | `ALLOWED_GROUP_IDS`       | Comma-separated Telegram group/supergroup IDs the bot can operate in. **Required** for groups — private chats with allowed users always work                                           |
+| `ALLOWED_ISSUE_USER_IDS`  | Comma-separated Telegram user IDs allowed to use `/issue`. Optional — if not set, all allowed users can create issues                                                                  |
 | `MAX_CONTEXT_MESSAGES`    | Number of recent messages sent to the AI as context (default: `15`)                                                                                                                    |
 | `MAX_RETAINED_MESSAGES`   | Number of messages kept per topic in the database before cron prunes (default: `100`)                                                                                                  |
 | `WEB_SEARCH`              | Set to `"true"` to enable web search. Supported by Moonshot (client-side tool loop) and OpenAI/Grok (server-side via Responses API). Model decides when to search. (default: disabled) |
@@ -112,11 +113,11 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 
 ## Bot Commands
 
-| Command          | Description                                            |
-| ---------------- | ------------------------------------------------------ |
-| `/help`          | Show help message                                      |
-| `/reset`         | Clear conversation history for the chat                |
-| `/issue <desc>`  | Create a GitHub issue from conversation context + desc |
+| Command         | Description                                            |
+| --------------- | ------------------------------------------------------ |
+| `/help`         | Show help message                                      |
+| `/reset`        | Clear conversation history for the chat                |
+| `/issue <desc>` | Create a GitHub issue from conversation context + desc |
 
 ## Bot Trigger Conditions
 

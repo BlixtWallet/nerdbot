@@ -143,6 +143,18 @@ http.route({
       }
 
       if (command === "/issue") {
+        const issueAllowlist = process.env.ALLOWED_ISSUE_USER_IDS ?? "";
+        if (issueAllowlist && !isAllowedUser(userId, issueAllowlist)) {
+          await sendMessage(
+            token,
+            chatId,
+            "You don't have permission to create issues.",
+            { replyToMessageId: messageId, messageThreadId },
+          );
+          log.set("blocked", true).set("reason", "issue_user_not_allowed").warn();
+          return new Response("OK", { status: 200 });
+        }
+
         const description = extractIssueDescription(messageText);
 
         await ctx.runMutation(internal.messages.store, {

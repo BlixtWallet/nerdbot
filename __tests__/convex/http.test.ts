@@ -338,6 +338,77 @@ describe("webhook: /issue command", () => {
     expect(response.status).toBe(200);
   });
 
+  it("blocks /issue from non-allowed issue user", async () => {
+    const t = convexTest(schema, modules);
+    vi.stubEnv("ALLOWED_ISSUE_USER_IDS", "99,88");
+    const calls = mockTelegramFetch();
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/issue fix the login bug",
+        }),
+      ),
+    );
+    expect(response.status).toBe(200);
+
+    // Should have sent a permission denied message
+    const sendCalls = calls.filter((c) => c.url.includes("/sendMessage"));
+    expect(sendCalls).toHaveLength(1);
+    expect((sendCalls[0]!.body as Record<string, unknown>).text).toContain(
+      "don't have permission",
+    );
+
+    // Should NOT store the message
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toEqual([]);
+  });
+
+  it("allows /issue from allowed issue user", async () => {
+    const t = convexTest(schema, modules);
+    vi.stubEnv("ALLOWED_ISSUE_USER_IDS", "1,99");
+    mockTelegramFetch();
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/issue fix the login bug",
+        }),
+      ),
+    );
+    expect(response.status).toBe(200);
+
+    // Should store the message (issue was allowed)
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe("/issue fix the login bug");
+  });
+
+  it("allows /issue from anyone when ALLOWED_ISSUE_USER_IDS is not set", async () => {
+    const t = convexTest(schema, modules);
+    // ALLOWED_ISSUE_USER_IDS is not set (default)
+    mockTelegramFetch();
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/issue fix the login bug",
+        }),
+      ),
+    );
+    expect(response.status).toBe(200);
+
+    // Should store the message (no restriction)
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+  });
+
   it("includes /issue in help text", async () => {
     const t = convexTest(schema, modules);
     const calls = mockTelegramFetch();

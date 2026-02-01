@@ -45,6 +45,7 @@ bunx convex env set WEB_SEARCH "true"
 bunx convex env set AI_THINKING "disabled"
 bunx convex env set GITHUB_TOKEN "your-github-pat"
 bunx convex env set GITHUB_REPO "owner/repo"
+bunx convex env set ALLOWED_ISSUE_USER_IDS "comma-separated-telegram-user-ids"
 ```
 
 ### Register Webhook
