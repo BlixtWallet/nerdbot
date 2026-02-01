@@ -62,7 +62,7 @@ export const processMessage = internalAction({
       }
       const maxContext =
         chatConfig?.maxContextMessages ??
-        Number(process.env.MAX_CONTEXT_MESSAGES ?? "30");
+        Number(process.env.MAX_CONTEXT_MESSAGES ?? "15");
 
       const recentMessages = await ctx.runQuery(internal.messages.getRecent, {
         chatId: args.chatId,

@@ -125,7 +125,7 @@ beforeEach(() => {
   vi.stubEnv("AI_PROVIDER", "moonshot");
   vi.stubEnv("AI_API_KEY", "test-api-key");
   vi.stubEnv("AI_MODEL", "test-model");
-  vi.stubEnv("MAX_CONTEXT_MESSAGES", "30");
+  vi.stubEnv("MAX_CONTEXT_MESSAGES", "15");
 });
 
 afterEach(() => {

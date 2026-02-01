@@ -39,7 +39,7 @@ Optional settings (have sensible defaults):
 
 ```bash
 bunx convex env set RATE_LIMIT_PER_MINUTE "10"
-bunx convex env set MAX_CONTEXT_MESSAGES "30"
+bunx convex env set MAX_CONTEXT_MESSAGES "15"
 bunx convex env set MAX_RETAINED_MESSAGES "100"
 bunx convex env set WEB_SEARCH "true"
 ```
