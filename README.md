@@ -42,6 +42,7 @@ bunx convex env set RATE_LIMIT_PER_MINUTE "10"
 bunx convex env set MAX_CONTEXT_MESSAGES "15"
 bunx convex env set MAX_RETAINED_MESSAGES "100"
 bunx convex env set WEB_SEARCH "true"
+bunx convex env set AI_THINKING "disabled"
 ```
 
 ### Register Webhook
@@ -98,4 +99,5 @@ bunx convex deploy
 - Messages older than the latest 100 per topic are automatically pruned daily (configurable via `MAX_RETAINED_MESSAGES`).
 - Only whitelisted users and groups can interact with the bot — check Convex logs for blocked user/group IDs.
 - **Web search**: When `WEB_SEARCH` is enabled, the model can autonomously search the web to answer questions about current events or look up information. Supported by Moonshot, OpenAI, and Grok.
+- **Thinking control (Moonshot)**: Set `AI_THINKING` to `disabled`, `enabled`, or `auto` (e.g. `disabled` for kimi-k2.5).
 - **Structured logging**: All logs are emitted as single JSON lines per request (wide events). Check the Convex dashboard for structured logs with fields like `event`, `chatId`, `userId`, `provider`, `inputTokens`, etc.

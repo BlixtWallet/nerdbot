@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { generateResponse } from "./lib/ai";
 import { sendMessage, sendChatAction, setWebhook } from "./lib/telegramApi";
-import { requireEnv } from "./lib/env";
+import { readOptionalThinkingEnv, requireEnv } from "./lib/env";
 import {
   formatConversation,
   stripCitations,
@@ -36,6 +36,7 @@ export const processMessage = internalAction({
     const aiApiKey = requireEnv("AI_API_KEY");
     const aiModel = process.env.AI_MODEL ?? "kimi-k2-0711-preview";
     const webSearch = process.env.WEB_SEARCH === "true";
+    const aiThinking = readOptionalThinkingEnv("AI_THINKING");
 
     const log = createLogger("process_message")
       .set("chatId", args.chatId)
@@ -78,7 +79,7 @@ export const processMessage = internalAction({
         aiModel,
         systemPrompt,
         conversation,
-        { webSearch },
+        { webSearch, thinking: aiThinking },
       );
 
       const responseText = truncateResponse(stripCitations(aiResponse.text));

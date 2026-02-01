@@ -10,8 +10,11 @@ export interface AIResponse {
   webSearchQueries?: string[];
 }
 
+export type ThinkingMode = "disabled" | "enabled" | "auto";
+
 export interface GenerateResponseOptions {
   webSearch?: boolean;
+  thinking?: ThinkingMode;
 }
 
 interface ClaudeAPIResponse {
@@ -125,10 +128,32 @@ async function callOpenAICompatible(
   model: string,
   systemPrompt: string,
   messages: ConversationMessage[],
+  thinking?: ThinkingMode,
 ): Promise<AIResponse> {
   const url = OPENAI_COMPATIBLE_ENDPOINTS[provider];
   if (!url) {
     throw new Error(`No endpoint configured for provider: ${provider}`);
+  }
+
+  const payload: {
+    model: string;
+    max_tokens: number;
+    messages: OpenAIRequestMessage[];
+    thinking?: { type: ThinkingMode };
+  } = {
+    model,
+    max_tokens: 1024,
+    messages: [
+      { role: "system", content: systemPrompt },
+      ...messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+    ],
+  };
+
+  if (provider === "moonshot" && thinking) {
+    payload.thinking = { type: thinking };
   }
 
   const response = await fetch(url, {
@@ -137,17 +162,7 @@ async function callOpenAICompatible(
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1024,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-      ],
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -171,6 +186,7 @@ async function callMoonshotWithSearch(
   model: string,
   systemPrompt: string,
   messages: ConversationMessage[],
+  thinking?: ThinkingMode,
 ): Promise<AIResponse> {
   const url = OPENAI_COMPATIBLE_ENDPOINTS.moonshot;
   if (!url) {
@@ -205,6 +221,7 @@ async function callMoonshotWithSearch(
         max_tokens: 1024,
         messages: apiMessages,
         tools,
+        ...(thinking && { thinking: { type: thinking } }),
       }),
     });
 
@@ -346,9 +363,22 @@ export async function generateResponse(
       return callClaude(apiKey, model, systemPrompt, messages);
     case "moonshot":
       if (options?.webSearch) {
-        return callMoonshotWithSearch(apiKey, model, systemPrompt, messages);
+        return callMoonshotWithSearch(
+          apiKey,
+          model,
+          systemPrompt,
+          messages,
+          options.thinking,
+        );
       }
-      return callOpenAICompatible(provider, apiKey, model, systemPrompt, messages);
+      return callOpenAICompatible(
+        provider,
+        apiKey,
+        model,
+        systemPrompt,
+        messages,
+        options?.thinking,
+      );
     case "grok":
       if (options?.webSearch) {
         return callResponsesAPIWithSearch(
@@ -359,7 +389,14 @@ export async function generateResponse(
           messages,
         );
       }
-      return callOpenAICompatible(provider, apiKey, model, systemPrompt, messages);
+      return callOpenAICompatible(
+        provider,
+        apiKey,
+        model,
+        systemPrompt,
+        messages,
+        options?.thinking,
+      );
     case "openai":
       if (options?.webSearch) {
         return callResponsesAPIWithSearch(
@@ -370,7 +407,14 @@ export async function generateResponse(
           messages,
         );
       }
-      return callOpenAICompatible(provider, apiKey, model, systemPrompt, messages);
+      return callOpenAICompatible(
+        provider,
+        apiKey,
+        model,
+        systemPrompt,
+        messages,
+        options?.thinking,
+      );
     default:
       throw new Error(`Unknown AI provider: ${provider}`);
   }

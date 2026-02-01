@@ -190,6 +190,25 @@ describe("generateResponse", () => {
       expect(body.messages[1]).toEqual({ role: "user", content: "Hello" });
     });
 
+    test("includes thinking config when provided", async () => {
+      const fetchMock = mockFetch({
+        choices: [{ message: { content: "response" } }],
+        usage: {},
+      });
+
+      await generateResponse(
+        "moonshot",
+        "key",
+        "model",
+        "prompt",
+        [{ role: "user", content: "Hello" }],
+        { thinking: "disabled" },
+      );
+
+      const body = getCallBody(fetchMock);
+      expect(body.thinking).toEqual({ type: "disabled" });
+    });
+
     test("returns parsed OpenAI-format response", async () => {
       mockFetch({
         choices: [{ message: { content: "Kimi says hi" } }],
