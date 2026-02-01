@@ -24,8 +24,8 @@ test("requireEnv throws when variable is empty string", () => {
   );
 });
 
-test("readOptionalThinkingEnv returns undefined when not set", () => {
-  expect(readOptionalThinkingEnv("TEST_THINKING_ENV")).toBeUndefined();
+test("readOptionalThinkingEnv defaults to disabled when not set", () => {
+  expect(readOptionalThinkingEnv("TEST_THINKING_ENV")).toBe("disabled");
 });
 
 test("readOptionalThinkingEnv accepts valid values", () => {

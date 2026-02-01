@@ -8,10 +8,10 @@ export function requireEnv(name: string): string {
 
 export type ThinkingMode = "disabled" | "enabled" | "auto";
 
-export function readOptionalThinkingEnv(name: string): ThinkingMode | undefined {
+export function readOptionalThinkingEnv(name: string): ThinkingMode {
   const value = process.env[name];
   if (!value) {
-    return undefined;
+    return "disabled";
   }
 
   const normalized = value.trim().toLowerCase();
