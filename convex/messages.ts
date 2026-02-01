@@ -133,20 +133,3 @@ export const clearChat = internalMutation({
     }
   },
 });
-
-export const updateSystemPrompt = internalMutation({
-  args: {
-    chatId: v.number(),
-    systemPrompt: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const chat = await ctx.db
-      .query("chats")
-      .withIndex("by_chatId", (q) => q.eq("chatId", args.chatId))
-      .unique();
-
-    if (chat) {
-      await ctx.db.patch(chat._id, { systemPrompt: args.systemPrompt });
-    }
-  },
-});

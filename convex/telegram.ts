@@ -21,11 +21,9 @@ export const processMessage = internalAction({
   },
   handler: async (ctx, args) => {
     const token = requireEnv("TELEGRAM_BOT_TOKEN");
-    const aiProvider = process.env.AI_PROVIDER ?? "claude";
+    const aiProvider = process.env.AI_PROVIDER ?? "moonshot";
     const aiApiKey = requireEnv("AI_API_KEY");
-    const aiModel =
-      process.env.AI_MODEL ??
-      (aiProvider === "claude" ? "claude-sonnet-4-20250514" : "gpt-4o");
+    const aiModel = process.env.AI_MODEL ?? "kimi-k2-0711-preview";
 
     try {
       await sendChatAction(token, args.chatId);

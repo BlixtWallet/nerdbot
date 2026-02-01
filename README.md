@@ -1,6 +1,6 @@
 # Nerdbot
 
-A Telegram AI chatbot powered by Convex. Supports Claude and OpenAI as AI backends. Works in group chats and private messages.
+A Telegram AI chatbot powered by Convex. Default AI provider is Moonshot (Kimi K2). Also supports Claude and OpenAI. Works in group chats and private messages.
 
 ## Setup
 
@@ -8,7 +8,7 @@ A Telegram AI chatbot powered by Convex. Supports Claude and OpenAI as AI backen
 
 - [Bun](https://bun.sh)
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- A Claude or OpenAI API key
+- A [Moonshot](https://platform.moonshot.ai/) API key (or Claude/OpenAI)
 
 ### Install
 
@@ -27,9 +27,9 @@ bunx convex dev --once --configure=new
 ```bash
 bunx convex env set TELEGRAM_BOT_TOKEN "your-token-from-botfather"
 bunx convex env set TELEGRAM_WEBHOOK_SECRET "any-random-secret-string"
-bunx convex env set AI_PROVIDER "claude"
-bunx convex env set AI_API_KEY "your-api-key"
-bunx convex env set AI_MODEL "claude-sonnet-4-20250514"
+bunx convex env set AI_PROVIDER "moonshot"
+bunx convex env set AI_API_KEY "your-moonshot-api-key"
+bunx convex env set AI_MODEL "kimi-k2-0711-preview"
 bunx convex env set BOT_USERNAME "nerdbot"
 ```
 
@@ -46,7 +46,6 @@ bunx convex run telegram:registerWebhook
    ```
    help - Show help message
    reset - Clear conversation history
-   setprompt - Set a custom system prompt
    ```
 
 ## Development
@@ -66,4 +65,3 @@ bunx convex deploy
 - **Groups**: Add @nerdbot to a group. Mention it with `@nerdbot` or reply to its messages.
 - **Private chat**: Message the bot directly.
 - `/reset` clears conversation history for the current chat.
-- `/setprompt <text>` customizes the bot's personality for the current chat.

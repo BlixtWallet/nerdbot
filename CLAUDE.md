@@ -1,6 +1,6 @@
 # Nerdbot
 
-Telegram AI bot running on Convex. Uses raw fetch for Telegram Bot API, supports Claude and OpenAI as AI providers.
+Telegram AI bot running on Convex. Uses raw fetch for Telegram Bot API. Default AI provider is Moonshot (Kimi K2). Also supports Claude and OpenAI.
 
 ## Tooling
 
@@ -19,7 +19,7 @@ convex/
   telegram.ts        - Core bot logic (processMessage action, registerWebhook)
   messages.ts        - Internal mutations/queries for message storage
   lib/
-    ai.ts            - AI provider abstraction (Claude + OpenAI)
+    ai.ts            - AI provider abstraction (Moonshot, Claude, OpenAI)
     telegramApi.ts   - Telegram Bot API helpers (sendMessage, sendChatAction, setWebhook)
     env.ts           - Environment variable helper (requireEnv)
 ```
@@ -53,9 +53,9 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 |----------|-------------|
 | `TELEGRAM_BOT_TOKEN` | From BotFather |
 | `TELEGRAM_WEBHOOK_SECRET` | Random string for webhook validation |
-| `AI_PROVIDER` | `"claude"` or `"openai"` |
-| `AI_API_KEY` | Claude or OpenAI API key |
-| `AI_MODEL` | e.g. `"claude-sonnet-4-20250514"` or `"gpt-4o"` |
+| `AI_PROVIDER` | `"moonshot"`, `"claude"`, or `"openai"` (default: `"moonshot"`) |
+| `AI_API_KEY` | API key for chosen provider |
+| `AI_MODEL` | e.g. `"kimi-k2-0711-preview"`, `"claude-sonnet-4-20250514"`, `"gpt-4o"` |
 | `BOT_USERNAME` | `nerdbot` (without @) |
 
 ## Key Design Decisions
@@ -71,7 +71,6 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 |---------|-------------|
 | `/help` | Show help message |
 | `/reset` | Clear conversation history for the chat |
-| `/setprompt <text>` | Set a custom system prompt for the chat |
 
 ## Bot Trigger Conditions
 

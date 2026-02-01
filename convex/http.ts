@@ -75,8 +75,7 @@ http.route({
           `Hi! I'm an AI assistant. Mention me with @${botUsername} or reply to my messages to chat.\n\n` +
             "Commands:\n" +
             "/help — Show this message\n" +
-            "/reset — Clear conversation history\n" +
-            "/setprompt — Set a custom system prompt",
+            "/reset — Clear conversation history",
         );
         return new Response("OK", { status: 200 });
       }
@@ -84,24 +83,6 @@ http.route({
       if (command === "/reset") {
         await ctx.runMutation(internal.messages.clearChat, { chatId });
         await sendMessage(token, chatId, "Conversation history cleared.");
-        return new Response("OK", { status: 200 });
-      }
-
-      if (command === "/setprompt") {
-        const newPrompt = messageText.replace(/^\/setprompt(@\w+)?\s*/, "");
-        if (!newPrompt) {
-          await sendMessage(token, chatId, "Usage: /setprompt Your custom prompt here");
-          return new Response("OK", { status: 200 });
-        }
-        await ctx.runMutation(internal.messages.ensureChat, {
-          chatId,
-          chatTitle,
-        });
-        await ctx.runMutation(internal.messages.updateSystemPrompt, {
-          chatId,
-          systemPrompt: newPrompt,
-        });
-        await sendMessage(token, chatId, "System prompt updated.");
         return new Response("OK", { status: 200 });
       }
     }
