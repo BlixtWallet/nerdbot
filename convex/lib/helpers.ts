@@ -57,6 +57,31 @@ export function formatConversation(
   }));
 }
 
+const SECRET_PATTERNS = [
+  /sk-[a-zA-Z0-9]{20,}/,
+  /xoxb-[a-zA-Z0-9-]+/,
+  /ghp_[a-zA-Z0-9]{36,}/,
+  /gho_[a-zA-Z0-9]{36,}/,
+  /glpat-[a-zA-Z0-9_-]{20,}/,
+  /Bearer\s+[a-zA-Z0-9._\-/+=]{20,}/,
+  /AKIA[0-9A-Z]{16}/,
+  /eyJ[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]{20,}/,
+];
+
+const MAX_SYSTEM_PROMPT_LENGTH = 2000;
+
+export function validateSystemPrompt(prompt: string): string | null {
+  if (prompt.length > MAX_SYSTEM_PROMPT_LENGTH) {
+    return `System prompt too long (${prompt.length} chars, max ${MAX_SYSTEM_PROMPT_LENGTH})`;
+  }
+  for (const pattern of SECRET_PATTERNS) {
+    if (pattern.test(prompt)) {
+      return "System prompt appears to contain a secret or API key";
+    }
+  }
+  return null;
+}
+
 export interface RateLimitRecord {
   windowStart: number;
   count: number;
