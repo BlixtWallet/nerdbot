@@ -12,6 +12,8 @@ import {
   formatConversation,
   evaluateRateLimit,
   validateSystemPrompt,
+  extractIssueDescription,
+  parseIssueSummary,
 } from "../../convex/lib/helpers";
 
 describe("shouldRespond", () => {
@@ -440,5 +442,87 @@ describe("formatReplyContext", () => {
 
   test("handles single character text", () => {
     expect(formatReplyContext("Frank", "?")).toBe('[Replying to Frank: "?"]\n');
+  });
+});
+
+describe("extractIssueDescription", () => {
+  test("extracts description after /issue", () => {
+    expect(extractIssueDescription("/issue fix the login bug")).toBe("fix the login bug");
+  });
+
+  test("returns empty string for /issue with no description", () => {
+    expect(extractIssueDescription("/issue")).toBe("");
+  });
+
+  test("handles /issue@nerdbot prefix", () => {
+    expect(extractIssueDescription("/issue@nerdbot fix the bug")).toBe("fix the bug");
+  });
+
+  test("preserves multiple words in description", () => {
+    expect(
+      extractIssueDescription("/issue this is a long description with details"),
+    ).toBe("this is a long description with details");
+  });
+
+  test("trims whitespace", () => {
+    expect(extractIssueDescription("/issue   extra spaces   ")).toBe("extra spaces");
+  });
+
+  test("handles description with special characters", () => {
+    expect(extractIssueDescription("/issue bug: 500 error on /api/users")).toBe(
+      "bug: 500 error on /api/users",
+    );
+  });
+});
+
+describe("parseIssueSummary", () => {
+  test("parses valid JSON response", () => {
+    const json = JSON.stringify({
+      title: "Bug: login fails",
+      body: "## Description\nLogin fails on submit.",
+      relevant: true,
+    });
+    const result = parseIssueSummary(json);
+    expect(result.title).toBe("Bug: login fails");
+    expect(result.body).toBe("## Description\nLogin fails on submit.");
+    expect(result.relevant).toBe(true);
+  });
+
+  test("handles JSON wrapped in markdown code fences", () => {
+    const json = `\`\`\`\n${JSON.stringify({ title: "Bug", body: "Desc", relevant: true })}\n\`\`\``;
+    const result = parseIssueSummary(json);
+    expect(result.title).toBe("Bug");
+    expect(result.relevant).toBe(true);
+  });
+
+  test("handles ```json code fences", () => {
+    const json = `\`\`\`json\n${JSON.stringify({ title: "Bug", body: "Desc", relevant: true })}\n\`\`\``;
+    const result = parseIssueSummary(json);
+    expect(result.title).toBe("Bug");
+  });
+
+  test("throws on invalid JSON", () => {
+    expect(() => parseIssueSummary("not json")).toThrow();
+  });
+
+  test("throws when title is not a string", () => {
+    const json = JSON.stringify({ title: 123, body: "Desc", relevant: true });
+    expect(() => parseIssueSummary(json)).toThrow("Invalid issue summary format");
+  });
+
+  test("throws when body is not a string", () => {
+    const json = JSON.stringify({ title: "Bug", body: null, relevant: true });
+    expect(() => parseIssueSummary(json)).toThrow("Invalid issue summary format");
+  });
+
+  test("throws when relevant is not a boolean", () => {
+    const json = JSON.stringify({ title: "Bug", body: "Desc", relevant: "yes" });
+    expect(() => parseIssueSummary(json)).toThrow("Invalid issue summary format");
+  });
+
+  test("handles relevant:false correctly", () => {
+    const json = JSON.stringify({ title: "", body: "", relevant: false });
+    const result = parseIssueSummary(json);
+    expect(result.relevant).toBe(false);
   });
 });

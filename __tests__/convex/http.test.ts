@@ -269,6 +269,91 @@ describe("webhook: command handling", () => {
   });
 });
 
+describe("webhook: /issue command", () => {
+  it("schedules processIssue and returns 200", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/issue fix the login bug",
+        }),
+      ),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("stores user message before scheduling", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/issue fix the login bug",
+        }),
+      ),
+    );
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe("/issue fix the login bug");
+    expect(messages[0]!.role).toBe("user");
+  });
+
+  it("handles /issue with no description", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/issue",
+        }),
+      ),
+    );
+    expect(response.status).toBe(200);
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe("/issue");
+  });
+
+  it("handles /issue@nerdbot prefix", async () => {
+    const t = convexTest(schema, modules);
+    mockTelegramFetch();
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/issue@nerdbot fix the bug",
+        }),
+      ),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("includes /issue in help text", async () => {
+    const t = convexTest(schema, modules);
+    const calls = mockTelegramFetch();
+    await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest(
+        makeUpdate({
+          text: "/help",
+        }),
+      ),
+    );
+    const sendCalls = calls.filter((c) => c.url.includes("/sendMessage"));
+    expect((sendCalls[0]!.body as Record<string, unknown>).text).toContain("/issue");
+  });
+});
+
 describe("webhook: rate limiting", () => {
   it("blocks message when rate limit exceeded", async () => {
     const t = convexTest(schema, modules);

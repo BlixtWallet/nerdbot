@@ -6,10 +6,12 @@ import { sendMessage, sendChatAction, setWebhook } from "./lib/telegramApi";
 import { readOptionalThinkingEnv, requireEnv } from "./lib/env";
 import {
   formatConversation,
+  parseIssueSummary,
   stripCitations,
   truncateResponse,
   validateSystemPrompt,
 } from "./lib/helpers";
+import { createGitHubIssue } from "./lib/github";
 import { createLogger } from "./lib/logger";
 
 const DEFAULT_SYSTEM_PROMPT = `You are Nerdbot, the resident AI in a Telegram group of tech-savvy nerds.
@@ -111,6 +113,126 @@ export const processMessage = internalAction({
         token,
         args.chatId,
         "Sorry, I encountered an error processing that message. Please try again.",
+        {
+          replyToMessageId: args.messageId,
+          messageThreadId: args.messageThreadId,
+        },
+      );
+    }
+  },
+});
+
+const ISSUE_SYSTEM_PROMPT = `You are a GitHub issue generator. Given a conversation and an optional description, generate a structured GitHub issue.
+
+Respond with ONLY a JSON object (no markdown fences, no extra text) with these fields:
+- "title": A concise issue title (max 100 chars)
+- "body": A well-structured issue body in markdown with sections: ## Description, ## Context (if relevant conversation details exist), ## Expected Behavior (if applicable)
+- "relevant": true if there's enough information to create a meaningful issue, false if the conversation lacks any actionable content and no description was provided
+
+Rules:
+- If a description is provided, always set relevant to true
+- If no description is provided AND the conversation has no bugs, feature requests, or actionable items, set relevant to false
+- Do not include usernames or private information in the issue
+- Keep the title descriptive but concise
+- The body should be professional and clear`;
+
+export const processIssue = internalAction({
+  args: {
+    chatId: v.number(),
+    userId: v.number(),
+    userName: v.string(),
+    description: v.string(),
+    messageId: v.number(),
+    messageThreadId: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const token = requireEnv("TELEGRAM_BOT_TOKEN");
+    const aiProvider = process.env.AI_PROVIDER ?? "moonshot";
+    const aiApiKey = requireEnv("AI_API_KEY");
+    const aiModel = process.env.AI_MODEL ?? "kimi-k2-0711-preview";
+    const githubToken = requireEnv("GITHUB_TOKEN");
+    const githubRepo = requireEnv("GITHUB_REPO");
+
+    const log = createLogger("process_issue")
+      .set("chatId", args.chatId)
+      .set("userId", args.userId)
+      .set("userName", args.userName)
+      .set("provider", aiProvider)
+      .set("repo", githubRepo);
+
+    try {
+      await sendChatAction(token, args.chatId, "typing", args.messageThreadId);
+
+      const maxContext = Number(process.env.MAX_CONTEXT_MESSAGES ?? "15");
+      const recentMessages = await ctx.runQuery(internal.messages.getRecent, {
+        chatId: args.chatId,
+        messageThreadId: args.messageThreadId,
+        limit: maxContext,
+      });
+
+      const conversation = formatConversation(recentMessages);
+
+      const issueUserMessage = args.description
+        ? `Create a GitHub issue based on this description: "${args.description}"`
+        : "Create a GitHub issue summarizing the recent conversation problems or requests.";
+
+      const messagesForAI = [
+        ...conversation,
+        { role: "user" as const, content: issueUserMessage },
+      ];
+
+      const aiResponse = await generateResponse(
+        aiProvider,
+        aiApiKey,
+        aiModel,
+        ISSUE_SYSTEM_PROMPT,
+        messagesForAI,
+      );
+
+      log
+        .set("inputTokens", aiResponse.inputTokens ?? null)
+        .set("outputTokens", aiResponse.outputTokens ?? null);
+
+      const summary = parseIssueSummary(aiResponse.text);
+
+      if (!summary.relevant) {
+        await sendMessage(
+          token,
+          args.chatId,
+          "Not enough context to create a meaningful issue. Try: /issue <description>",
+          { replyToMessageId: args.messageId, messageThreadId: args.messageThreadId },
+        );
+        log.set("action", "skipped").set("reason", "not_relevant").info();
+        return;
+      }
+
+      const issue = await createGitHubIssue(
+        githubToken,
+        githubRepo,
+        summary.title,
+        summary.body,
+      );
+
+      await sendMessage(
+        token,
+        args.chatId,
+        `Created issue #${String(issue.number)}: ${issue.html_url}`,
+        { replyToMessageId: args.messageId, messageThreadId: args.messageThreadId },
+      );
+
+      log
+        .set("action", "created")
+        .set("issueNumber", issue.number)
+        .set("issueUrl", issue.html_url)
+        .info();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.set("error", message).error();
+
+      await sendMessage(
+        token,
+        args.chatId,
+        "Sorry, I couldn't create the GitHub issue. Please try again.",
         {
           replyToMessageId: args.messageId,
           messageThreadId: args.messageThreadId,

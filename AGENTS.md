@@ -16,7 +16,7 @@ Default to Bun instead of Node.js.
 convex/
   schema.ts          - Database schema (messages, chats, rateLimits)
   http.ts            - HTTP webhook endpoint (POST /api/telegram-webhook)
-  telegram.ts        - Core bot logic (processMessage action, registerWebhook)
+  telegram.ts        - Core bot logic (processMessage, processIssue actions, registerWebhook)
   messages.ts        - Internal mutations/queries for message storage
   crons.ts           - Daily cron job to prune old messages
   lib/
@@ -24,19 +24,21 @@ convex/
     telegramApi.ts   - Telegram Bot API helpers (sendMessage, sendChatAction, setWebhook)
     env.ts           - Environment variable helper (requireEnv)
     helpers.ts       - Pure logic extracted for testability (rate limiting, trigger logic, etc.)
+    github.ts        - GitHub API helper (createGitHubIssue)
     logger.ts        - Structured wide-event logger (one JSON log line per request)
 __tests__/
   unit/
     env.test.ts        - Tests for requireEnv (bun:test)
     ai.test.ts         - Tests for AI provider abstraction (bun:test)
     telegramApi.test.ts - Tests for Telegram API helpers (bun:test)
+    github.test.ts     - Tests for GitHub API helper (bun:test)
     helpers.test.ts    - Tests for rate limiting, trigger logic, command parsing, etc. (bun:test)
     logger.test.ts     - Tests for structured logger (bun:test)
   convex/
     test.setup.ts      - Vitest module glob for convex-test
     messages.test.ts   - Integration tests for message mutations/queries (vitest + convex-test)
     http.test.ts       - Integration tests for webhook HTTP handler (vitest + convex-test)
-    telegram.test.ts   - Integration tests for processMessage action (vitest + convex-test)
+    telegram.test.ts   - Integration tests for processMessage/processIssue actions (vitest + convex-test)
 ```
 
 ## Scripts
@@ -74,7 +76,7 @@ __tests__/
 - Unit test files import source via relative paths (e.g. `../../convex/lib/ai`)
 - Unit tests mock `globalThis.fetch` for HTTP-dependent code (AI providers, Telegram API)
 - Convex tests use `convex-test` for in-memory DB, `t.fetch()` for HTTP actions, and `vi.stubGlobal("fetch", ...)` for external API calls
-- Key areas covered: rate limiting, bot trigger logic, command parsing, mention stripping, response truncation, conversation formatting, all AI providers, Telegram API calls, env helpers, message CRUD, webhook routing, AI processing pipeline
+- Key areas covered: rate limiting, bot trigger logic, command parsing, mention stripping, response truncation, conversation formatting, all AI providers, Telegram API calls, GitHub API calls, env helpers, message CRUD, webhook routing, AI processing pipeline, issue creation
 
 ## Environment Variables
 
@@ -95,6 +97,8 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 | `MAX_CONTEXT_MESSAGES`    | Number of recent messages sent to the AI as context (default: `15`)                                                                                                                    |
 | `MAX_RETAINED_MESSAGES`   | Number of messages kept per topic in the database before cron prunes (default: `100`)                                                                                                  |
 | `WEB_SEARCH`              | Set to `"true"` to enable web search. Supported by Moonshot (client-side tool loop) and OpenAI/Grok (server-side via Responses API). Model decides when to search. (default: disabled) |
+| `GITHUB_TOKEN`            | GitHub Personal Access Token with `repo` scope. Required for `/issue` command.                                                                                                         |
+| `GITHUB_REPO`             | Target GitHub repository in `owner/repo` format (e.g. `user/nerdbot`). Required for `/issue` command.                                                                                  |
 
 ## Key Design Decisions
 
@@ -108,10 +112,11 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 
 ## Bot Commands
 
-| Command  | Description                             |
-| -------- | --------------------------------------- |
-| `/help`  | Show help message                       |
-| `/reset` | Clear conversation history for the chat |
+| Command          | Description                                            |
+| ---------------- | ------------------------------------------------------ |
+| `/help`          | Show help message                                      |
+| `/reset`         | Clear conversation history for the chat                |
+| `/issue <desc>`  | Create a GitHub issue from conversation context + desc |
 
 ## Bot Trigger Conditions
 

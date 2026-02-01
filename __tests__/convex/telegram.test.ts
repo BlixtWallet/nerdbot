@@ -95,6 +95,76 @@ function mockFetchForAI(aiResponseText: string, inputTokens = 10, outputTokens =
   return calls;
 }
 
+function mockFetchForIssue(
+  aiResponseJson: string,
+  githubIssue = {
+    html_url: "https://github.com/owner/repo/issues/1",
+    number: 1,
+    title: "Test Issue",
+  },
+) {
+  const calls: FetchCall[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(init.body as string) : undefined;
+      calls.push({ url, body });
+
+      // Telegram API calls
+      if (url.includes("api.telegram.org")) {
+        return new Response(JSON.stringify({ ok: true, result: {} }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // GitHub API call
+      if (url.includes("api.github.com")) {
+        return new Response(JSON.stringify(githubIssue), {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // Moonshot / OpenAI-compatible API call
+      if (url.includes("chat/completions")) {
+        return new Response(
+          JSON.stringify({
+            choices: [
+              {
+                finish_reason: "stop",
+                message: { role: "assistant", content: aiResponseJson },
+              },
+            ],
+            usage: { prompt_tokens: 10, completion_tokens: 20 },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      // Claude API call
+      if (url.includes("api.anthropic.com")) {
+        return new Response(
+          JSON.stringify({
+            content: [{ text: aiResponseJson }],
+            usage: { input_tokens: 10, output_tokens: 20 },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      return new Response("Not found", { status: 404 });
+    }),
+  );
+  return calls;
+}
+
 function mockFetchForAIError(errorMessage: string) {
   const calls: FetchCall[] = [];
   vi.stubGlobal(
@@ -518,5 +588,154 @@ describe("processMessage", () => {
     });
     const assistantMessages = messages.filter((m) => m.role === "assistant");
     expect(assistantMessages[0]!.text).toBe("Hello from Claude!");
+  });
+});
+
+describe("processIssue", () => {
+  beforeEach(() => {
+    vi.stubEnv("GITHUB_TOKEN", "ghp_test_token");
+    vi.stubEnv("GITHUB_REPO", "owner/repo");
+  });
+
+  it("creates GitHub issue and replies with URL", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.messages.store, {
+      chatId: 100,
+      role: "user",
+      text: "The login page is broken",
+      userId: 1,
+      userName: "Alice",
+    });
+
+    const aiJson = JSON.stringify({
+      title: "Bug: Login page broken",
+      body: "## Description\nThe login page is broken.",
+      relevant: true,
+    });
+
+    const calls = mockFetchForIssue(aiJson, {
+      html_url: "https://github.com/owner/repo/issues/42",
+      number: 42,
+      title: "Bug: Login page broken",
+    });
+
+    await t.action(internal.telegram.processIssue, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      description: "fix the login page",
+      messageId: 1,
+    });
+
+    // Should have called GitHub API
+    const githubCalls = calls.filter((c) => c.url.includes("api.github.com"));
+    expect(githubCalls).toHaveLength(1);
+    expect((githubCalls[0]!.body as Record<string, unknown>).title).toBe(
+      "Bug: Login page broken",
+    );
+
+    // Should have sent issue URL to user
+    const sendCalls = calls.filter((c) => c.url.includes("/sendMessage"));
+    expect(sendCalls).toHaveLength(1);
+    expect((sendCalls[0]!.body as Record<string, unknown>).text).toContain(
+      "https://github.com/owner/repo/issues/42",
+    );
+  });
+
+  it("sends typing indicator first", async () => {
+    const t = convexTest(schema, modules);
+    const aiJson = JSON.stringify({
+      title: "Bug",
+      body: "Desc",
+      relevant: true,
+    });
+    const calls = mockFetchForIssue(aiJson);
+
+    await t.action(internal.telegram.processIssue, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      description: "some bug",
+      messageId: 1,
+    });
+
+    const typingCalls = calls.filter((c) => c.url.includes("/sendChatAction"));
+    expect(typingCalls).toHaveLength(1);
+  });
+
+  it("skips issue creation when AI returns relevant:false", async () => {
+    const t = convexTest(schema, modules);
+    const aiJson = JSON.stringify({
+      title: "",
+      body: "",
+      relevant: false,
+    });
+    const calls = mockFetchForIssue(aiJson);
+
+    await t.action(internal.telegram.processIssue, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      description: "",
+      messageId: 1,
+    });
+
+    // Should NOT have called GitHub API
+    const githubCalls = calls.filter((c) => c.url.includes("api.github.com"));
+    expect(githubCalls).toHaveLength(0);
+
+    // Should have sent skip message
+    const sendCalls = calls.filter((c) => c.url.includes("/sendMessage"));
+    expect(sendCalls).toHaveLength(1);
+    expect((sendCalls[0]!.body as Record<string, unknown>).text).toContain(
+      "Not enough context",
+    );
+  });
+
+  it("sends error message when AI API fails", async () => {
+    const t = convexTest(schema, modules);
+    const calls = mockFetchForAIError("Internal Server Error");
+    vi.stubEnv("GITHUB_TOKEN", "ghp_test_token");
+    vi.stubEnv("GITHUB_REPO", "owner/repo");
+
+    await t.action(internal.telegram.processIssue, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      description: "fix the bug",
+      messageId: 1,
+    });
+
+    const sendCalls = calls.filter((c) => c.url.includes("/sendMessage"));
+    expect(sendCalls.length).toBeGreaterThanOrEqual(1);
+    const errorMsg = sendCalls.find((c) =>
+      ((c.body as Record<string, unknown>).text as string).includes("couldn't create"),
+    );
+    expect(errorMsg).toBeDefined();
+  });
+
+  it("includes messageThreadId for forum topics", async () => {
+    const t = convexTest(schema, modules);
+    const aiJson = JSON.stringify({
+      title: "Bug",
+      body: "Desc",
+      relevant: true,
+    });
+    const calls = mockFetchForIssue(aiJson);
+
+    await t.action(internal.telegram.processIssue, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      description: "bug in topic",
+      messageId: 1,
+      messageThreadId: 7,
+    });
+
+    const typingCall = calls.find((c) => c.url.includes("/sendChatAction"));
+    expect((typingCall?.body as Record<string, unknown>).message_thread_id).toBe(7);
+
+    const sendCall = calls.find((c) => c.url.includes("/sendMessage"));
+    expect((sendCall?.body as Record<string, unknown>).message_thread_id).toBe(7);
   });
 });

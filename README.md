@@ -43,6 +43,8 @@ bunx convex env set MAX_CONTEXT_MESSAGES "15"
 bunx convex env set MAX_RETAINED_MESSAGES "100"
 bunx convex env set WEB_SEARCH "true"
 bunx convex env set AI_THINKING "disabled"
+bunx convex env set GITHUB_TOKEN "your-github-pat"
+bunx convex env set GITHUB_REPO "owner/repo"
 ```
 
 ### Register Webhook
@@ -58,6 +60,7 @@ bunx convex run telegram:registerWebhook
    ```
    help - Show help message
    reset - Clear conversation history
+   issue - Create a GitHub issue from conversation
    ```
 
 ## Development
@@ -96,6 +99,7 @@ bunx convex deploy
 - **Groups**: Add @nerdbot to a group. Mention it with `@nerdbot` to chat. Supports forum topics — replies in the same thread.
 - **Private chat**: Message the bot directly.
 - `/reset` clears conversation history for the current chat.
+- `/issue <description>` creates a GitHub issue by summarizing the conversation context + your description. Requires `GITHUB_TOKEN` and `GITHUB_REPO` to be set.
 - Messages older than the latest 100 per topic are automatically pruned daily (configurable via `MAX_RETAINED_MESSAGES`).
 - Only whitelisted users and groups can interact with the bot — check Convex logs for blocked user/group IDs.
 - **Web search**: When `WEB_SEARCH` is enabled, the model can autonomously search the web to answer questions about current events or look up information. Supported by Moonshot, OpenAI, and Grok.

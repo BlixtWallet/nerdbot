@@ -11,6 +11,7 @@ import {
   stripMention,
   buildUserName,
   formatReplyContext,
+  extractIssueDescription,
 } from "./lib/helpers";
 import { createLogger } from "./lib/logger";
 
@@ -126,7 +127,8 @@ http.route({
           `Hi! I'm an AI assistant. Mention me with @${botUsername} to chat.\n\n` +
             "Commands:\n" +
             "/help — Show this message\n" +
-            "/reset — Clear conversation history",
+            "/reset — Clear conversation history\n" +
+            "/issue <desc> — Create a GitHub issue from conversation",
           { messageThreadId },
         );
         return new Response("OK", { status: 200 });
@@ -137,6 +139,32 @@ http.route({
         await sendMessage(token, chatId, "Conversation history cleared.", {
           messageThreadId,
         });
+        return new Response("OK", { status: 200 });
+      }
+
+      if (command === "/issue") {
+        const description = extractIssueDescription(messageText);
+
+        await ctx.runMutation(internal.messages.store, {
+          chatId,
+          messageThreadId,
+          userId,
+          userName,
+          role: "user" as const,
+          text: replyContext + messageText,
+          telegramMessageId: messageId,
+        });
+
+        await ctx.scheduler.runAfter(0, internal.telegram.processIssue, {
+          chatId,
+          userId,
+          userName,
+          description,
+          messageId,
+          messageThreadId,
+        });
+
+        log.set("action", "issue_scheduled").info();
         return new Response("OK", { status: 200 });
       }
     }

@@ -102,6 +102,37 @@ export function validateSystemPrompt(prompt: string): string | null {
   return null;
 }
 
+export function extractIssueDescription(messageText: string): string {
+  const spaceIndex = messageText.indexOf(" ");
+  if (spaceIndex === -1) return "";
+  return messageText.slice(spaceIndex + 1).trim();
+}
+
+export interface IssueSummary {
+  title: string;
+  body: string;
+  relevant: boolean;
+}
+
+export function parseIssueSummary(aiResponseText: string): IssueSummary {
+  const cleaned = aiResponseText
+    .replace(/^```(?:json)?\s*\n?/i, "")
+    .replace(/\n?```\s*$/, "")
+    .trim();
+
+  const parsed = JSON.parse(cleaned) as Record<string, unknown>;
+
+  if (
+    typeof parsed.title !== "string" ||
+    typeof parsed.body !== "string" ||
+    typeof parsed.relevant !== "boolean"
+  ) {
+    throw new Error("Invalid issue summary format from AI");
+  }
+
+  return parsed as unknown as IssueSummary;
+}
+
 export interface RateLimitRecord {
   windowStart: number;
   count: number;
