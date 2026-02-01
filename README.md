@@ -71,7 +71,7 @@ bunx convex dev
 bun test
 ```
 
-Tests are in `tests/` and cover rate limiting, bot trigger logic, command parsing, mention stripping, response truncation, conversation formatting, AI providers, and Telegram API calls.
+Tests are in `tests/` and cover rate limiting, bot trigger logic, command parsing, mention stripping, response truncation, conversation formatting, AI providers, Telegram API calls, and structured logging.
 
 ## Deploy
 
@@ -86,3 +86,5 @@ bunx convex deploy
 - `/reset` clears conversation history for the current chat.
 - Messages older than the latest 100 per topic are automatically pruned daily (configurable via `MAX_RETAINED_MESSAGES`).
 - Only whitelisted users and groups can interact with the bot — check Convex logs for blocked user/group IDs.
+- **Web search**: When `MOONSHOT_WEB_SEARCH` is enabled, the model can autonomously search the web to answer questions about current events or look up information.
+- **Structured logging**: All logs are emitted as single JSON lines per request (wide events). Check the Convex dashboard for structured logs with fields like `event`, `chatId`, `userId`, `provider`, `inputTokens`, etc.

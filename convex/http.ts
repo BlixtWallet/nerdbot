@@ -11,6 +11,7 @@ import {
   stripMention,
   buildUserName,
 } from "./lib/helpers";
+import { createLogger } from "./lib/logger";
 
 interface TelegramUpdate {
   message?: {
@@ -60,18 +61,26 @@ http.route({
     const botUsername = process.env.BOT_USERNAME ?? "";
     const token = requireEnv("TELEGRAM_BOT_TOKEN");
 
+    const log = createLogger("webhook")
+      .set("chatId", chatId)
+      .set("userId", userId)
+      .set("userName", userName)
+      .set("chatType", message.chat.type);
+
     // 3. Check allowlists
     // In private chats: user must be in ALLOWED_USER_IDS
     // In groups: group must be in ALLOWED_GROUP_IDS (all members can interact)
     const isPrivate = message.chat.type === "private";
     if (isPrivate && !isAllowedUser(userId, process.env.ALLOWED_USER_IDS ?? "")) {
-      console.warn(`[BLOCKED] User not allowed — userId: ${userId}, name: ${userName}`);
+      log.set("blocked", true).set("reason", "user_not_allowed").warn();
       return new Response("OK", { status: 200 });
     }
     if (!isPrivate && !isAllowedChat(chatId, process.env.ALLOWED_GROUP_IDS ?? "")) {
-      console.warn(
-        `[BLOCKED] Group not allowed — chatId: ${chatId}, title: ${chatTitle ?? "unknown"}, userId: ${userId}`,
-      );
+      log
+        .set("blocked", true)
+        .set("reason", "group_not_allowed")
+        .set("chatTitle", chatTitle ?? null)
+        .warn();
       return new Response("OK", { status: 200 });
     }
 
@@ -162,6 +171,7 @@ http.route({
       messageThreadId,
     });
 
+    log.set("action", "scheduled").info();
     return new Response("OK", { status: 200 });
   }),
 });

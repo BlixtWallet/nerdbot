@@ -7,6 +7,7 @@ export interface AIResponse {
   text: string;
   inputTokens?: number;
   outputTokens?: number;
+  webSearchQueries?: string[];
 }
 
 export interface GenerateResponseOptions {
@@ -167,6 +168,7 @@ async function callMoonshotWithSearch(
 
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  const searchQueries: string[] = [];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
     const response = await fetch(url, {
@@ -204,14 +206,15 @@ async function callMoonshotWithSearch(
         text: choice.message.content ?? "",
         inputTokens: totalInputTokens,
         outputTokens: totalOutputTokens,
+        ...(searchQueries.length > 0 && {
+          webSearchQueries: searchQueries,
+        }),
       };
     }
 
     if (choice.finish_reason === "tool_calls" && choice.message.tool_calls) {
       for (const toolCall of choice.message.tool_calls) {
-        console.log(
-          `[web_search] tool=${toolCall.function.name} args=${toolCall.function.arguments}`,
-        );
+        searchQueries.push(toolCall.function.arguments);
       }
 
       apiMessages.push({
@@ -237,6 +240,9 @@ async function callMoonshotWithSearch(
       text: choice.message.content ?? "",
       inputTokens: totalInputTokens,
       outputTokens: totalOutputTokens,
+      ...(searchQueries.length > 0 && {
+        webSearchQueries: searchQueries,
+      }),
     };
   }
 

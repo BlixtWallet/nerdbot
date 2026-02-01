@@ -24,11 +24,13 @@ convex/
     telegramApi.ts   - Telegram Bot API helpers (sendMessage, sendChatAction, setWebhook)
     env.ts           - Environment variable helper (requireEnv)
     helpers.ts       - Pure logic extracted for testability (rate limiting, trigger logic, etc.)
+    logger.ts        - Structured wide-event logger (one JSON log line per request)
 tests/
   env.test.ts        - Tests for requireEnv
   ai.test.ts         - Tests for AI provider abstraction
   telegramApi.test.ts - Tests for Telegram API helpers
   helpers.test.ts    - Tests for rate limiting, trigger logic, command parsing, etc.
+  logger.test.ts     - Tests for structured logger
 ```
 
 ## Scripts
@@ -88,6 +90,7 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 - **Rate limiting**: Per-user, per-group sliding window. Configurable via `RATE_LIMIT_PER_MINUTE` (default: 10).
 - **Forum/topic support**: Bot replies in the same thread it received a message from via `message_thread_id`.
 - **Message cleanup**: Daily cron keeps only the latest 100 messages per chat, deletes the rest.
+- **Wide-event logging**: One structured JSON log line per request via `createLogger()`. Build up context with `.set()`, emit once at the end with `.info()/.warn()/.error()`. No scattered `console.log` calls.
 
 ## Bot Commands
 

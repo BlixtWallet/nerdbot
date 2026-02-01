@@ -5,6 +5,7 @@ import { generateResponse } from "./lib/ai";
 import { sendMessage, sendChatAction, setWebhook } from "./lib/telegramApi";
 import { requireEnv } from "./lib/env";
 import { formatConversation, truncateResponse } from "./lib/helpers";
+import { createLogger } from "./lib/logger";
 
 const DEFAULT_SYSTEM_PROMPT = `You are Nerdbot, the resident AI in a Telegram group of tech-savvy nerds.
 You're witty, sharp, and love banter. Keep it casual and concise — no essays.
@@ -30,6 +31,13 @@ export const processMessage = internalAction({
     const aiApiKey = requireEnv("AI_API_KEY");
     const aiModel = process.env.AI_MODEL ?? "kimi-k2-0711-preview";
     const webSearch = process.env.MOONSHOT_WEB_SEARCH === "true";
+
+    const log = createLogger("process_message")
+      .set("chatId", args.chatId)
+      .set("userId", args.userId)
+      .set("userName", args.userName)
+      .set("provider", aiProvider)
+      .set("model", aiModel);
 
     try {
       await sendChatAction(token, args.chatId, "typing", args.messageThreadId);
@@ -62,6 +70,12 @@ export const processMessage = internalAction({
 
       const responseText = truncateResponse(aiResponse.text);
 
+      log
+        .set("inputTokens", aiResponse.inputTokens ?? null)
+        .set("outputTokens", aiResponse.outputTokens ?? null)
+        .set("contextMessages", conversation.length)
+        .set("webSearchQueries", aiResponse.webSearchQueries?.join(", ") ?? null);
+
       await ctx.runMutation(internal.messages.store, {
         chatId: args.chatId,
         messageThreadId: args.messageThreadId,
@@ -73,8 +87,11 @@ export const processMessage = internalAction({
         replyToMessageId: args.messageId,
         messageThreadId: args.messageThreadId,
       });
+
+      log.info();
     } catch (error: unknown) {
-      console.error("Error processing message:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      log.set("error", message).error();
 
       await sendMessage(
         token,
@@ -98,7 +115,10 @@ export const registerWebhook = action({
     const webhookUrl = `${convexUrl}/api/telegram-webhook`;
 
     const result = await setWebhook(token, webhookUrl, secret);
-    console.log("Webhook registration result:", result);
+    createLogger("register_webhook")
+      .set("url", webhookUrl)
+      .set("result", JSON.stringify(result))
+      .info();
     return result;
   },
 });

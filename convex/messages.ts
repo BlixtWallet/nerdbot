@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import { evaluateRateLimit } from "./lib/helpers";
+import { createLogger } from "./lib/logger";
 
 export const store = internalMutation({
   args: {
@@ -164,7 +165,10 @@ export const deleteOldMessages = internalMutation({
     }
 
     if (totalDeleted > 0) {
-      console.log(`Cron: deleted ${String(totalDeleted)} old messages`);
+      createLogger("cron_cleanup")
+        .set("deletedMessages", totalDeleted)
+        .set("chatGroups", groups.size)
+        .info();
     }
   },
 });
