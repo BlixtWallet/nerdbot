@@ -202,6 +202,73 @@ describe("webhook: message storage without response", () => {
   });
 });
 
+describe("webhook: image handling", () => {
+  it("stores photo captions with [Image] prefix and stripped mention", async () => {
+    const t = convexTest(schema, modules);
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest({
+        message: {
+          chat: { id: 100, type: "group", title: "Test Group" },
+          from: { id: 1, first_name: "Alice" },
+          caption: "@nerdbot what's this",
+          photo: [
+            {
+              file_id: "photo-1",
+              file_unique_id: "unique-1",
+              width: 100,
+              height: 100,
+              file_size: 1234,
+            },
+          ],
+          message_id: 10,
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+    const messages = await t.query(internal.messages.getRecent, { chatId: 100 });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe("[Image] what's this");
+    expect(messages[0]!.imageFileId).toBe("photo-1");
+    expect(messages[0]!.imageMimeType).toBe("image/jpeg");
+  });
+
+  it("prompts for a question when image has no caption in private chat", async () => {
+    const t = convexTest(schema, modules);
+    const calls = mockTelegramFetch();
+    const response = await t.fetch(
+      "/api/telegram-webhook",
+      webhookRequest({
+        message: {
+          chat: { id: 1, type: "private" },
+          from: { id: 1, first_name: "Alice" },
+          photo: [
+            {
+              file_id: "photo-2",
+              file_unique_id: "unique-2",
+              width: 100,
+              height: 100,
+              file_size: 1234,
+            },
+          ],
+          message_id: 11,
+        },
+      }),
+    );
+    expect(response.status).toBe(200);
+
+    const sendCalls = calls.filter((c) => c.url.includes("/sendMessage"));
+    expect(sendCalls).toHaveLength(1);
+    expect((sendCalls[0]!.body as Record<string, unknown>).text).toBe(
+      "What should I look for in this image? Add a question in the caption or reply with a question.",
+    );
+
+    const messages = await t.query(internal.messages.getRecent, { chatId: 1 });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.text).toBe("[Image]");
+  });
+});
+
 describe("webhook: command handling", () => {
   it("handles /help command by sending help message", async () => {
     const t = convexTest(schema, modules);

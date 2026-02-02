@@ -1,7 +1,11 @@
 export interface ConversationMessage {
   role: "user" | "assistant";
-  content: string;
+  content: string | ContentPart[];
 }
+
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image"; mediaType: string; data: string };
 
 export interface AIResponse {
   text: string;
@@ -45,10 +49,16 @@ interface OpenAIAPIResponse {
 
 interface OpenAIRequestMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | null;
+  content: string | OpenAIContentPart[] | null;
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
   name?: string;
+}
+
+interface OpenAIContentPart {
+  type: "text" | "image_url";
+  text?: string;
+  image_url?: { url: string };
 }
 
 interface MoonshotTool {
@@ -78,12 +88,55 @@ interface ResponsesAPIResponse {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
+function toOpenAIContent(content: string | ContentPart[]): string | OpenAIContentPart[] {
+  if (typeof content === "string") return content;
+  return content.map((part) => {
+    if (part.type === "text") {
+      return { type: "text", text: part.text };
+    }
+    return {
+      type: "image_url",
+      image_url: { url: `data:${part.mediaType};base64,${part.data}` },
+    };
+  });
+}
+
+function toTextContent(content: string | ContentPart[]): string {
+  if (typeof content === "string") return content;
+  return content.map((part) => (part.type === "text" ? part.text : "[image]")).join(" ");
+}
+
+function hasImage(messages: ConversationMessage[]): boolean {
+  return messages.some(
+    (message) =>
+      Array.isArray(message.content) &&
+      message.content.some((part) => part.type === "image"),
+  );
+}
+
 async function callClaude(
   apiKey: string,
   model: string,
   systemPrompt: string,
   messages: ConversationMessage[],
 ): Promise<AIResponse> {
+  const contentForClaude = (content: string | ContentPart[]) => {
+    if (typeof content === "string") return content;
+    return content.map((part) => {
+      if (part.type === "text") {
+        return { type: "text", text: part.text };
+      }
+      return {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: part.mediaType,
+          data: part.data,
+        },
+      };
+    });
+  };
+
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -97,7 +150,7 @@ async function callClaude(
       system: systemPrompt,
       messages: messages.map((m) => ({
         role: m.role,
-        content: m.content,
+        content: contentForClaude(m.content),
       })),
     }),
   });
@@ -147,7 +200,7 @@ async function callOpenAICompatible(
       { role: "system", content: systemPrompt },
       ...messages.map((m) => ({
         role: m.role,
-        content: m.content,
+        content: toOpenAIContent(m.content),
       })),
     ],
   };
@@ -201,7 +254,7 @@ async function callMoonshotWithSearch(
     { role: "system", content: systemPrompt },
     ...messages.map((m) => ({
       role: m.role,
-      content: m.content,
+      content: toOpenAIContent(m.content),
     })),
   ];
 
@@ -318,7 +371,7 @@ async function callResponsesAPIWithSearch(
         { role: "system", content: systemPrompt },
         ...messages.map((m) => ({
           role: m.role,
-          content: m.content,
+          content: toTextContent(m.content),
         })),
       ],
       tools: [{ type: "web_search" }],
@@ -358,11 +411,12 @@ export async function generateResponse(
   messages: ConversationMessage[],
   options?: GenerateResponseOptions,
 ): Promise<AIResponse> {
+  const allowWebSearch = options?.webSearch && !hasImage(messages);
   switch (provider) {
     case "claude":
       return callClaude(apiKey, model, systemPrompt, messages);
     case "moonshot":
-      if (options?.webSearch) {
+      if (allowWebSearch) {
         return callMoonshotWithSearch(
           apiKey,
           model,
@@ -380,7 +434,7 @@ export async function generateResponse(
         options?.thinking,
       );
     case "grok":
-      if (options?.webSearch) {
+      if (allowWebSearch) {
         return callResponsesAPIWithSearch(
           provider,
           apiKey,
@@ -398,7 +452,7 @@ export async function generateResponse(
         options?.thinking,
       );
     case "openai":
-      if (options?.webSearch) {
+      if (allowWebSearch) {
         return callResponsesAPIWithSearch(
           provider,
           apiKey,

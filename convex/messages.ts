@@ -12,6 +12,9 @@ export const store = internalMutation({
     role: v.union(v.literal("user"), v.literal("assistant")),
     text: v.string(),
     telegramMessageId: v.optional(v.number()),
+    imageFileId: v.optional(v.string()),
+    imageMimeType: v.optional(v.string()),
+    imageFileSize: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("messages", {
@@ -38,6 +41,34 @@ export const getRecent = internalQuery({
       .take(limit);
 
     return messages.reverse();
+  },
+});
+
+export const getRecentImageForUser = internalQuery({
+  args: {
+    chatId: v.number(),
+    messageThreadId: v.optional(v.number()),
+    userId: v.number(),
+    since: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const since = args.since ?? 0;
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_chat_user_thread", (q) =>
+        q
+          .eq("chatId", args.chatId)
+          .eq("messageThreadId", args.messageThreadId)
+          .eq("userId", args.userId),
+      )
+      .order("desc")
+      .take(10);
+
+    const match = messages.find(
+      (msg) => msg.timestamp >= since && msg.role === "user" && msg.imageFileId,
+    );
+
+    return match ?? null;
   },
 });
 

@@ -178,6 +178,82 @@ describe("messages.getRecent", () => {
   });
 });
 
+describe("messages.getRecentImageForUser", () => {
+  it("returns the most recent image message for the user within the time window", async () => {
+    const t = convexTest(schema, modules);
+    const now = 1_000_000;
+    const dateSpy = vi.spyOn(Date, "now");
+
+    dateSpy.mockReturnValue(now - 600_000);
+    await t.mutation(internal.messages.store, {
+      chatId: 100,
+      messageThreadId: 1,
+      role: "user",
+      text: "[Image] old",
+      userId: 1,
+      imageFileId: "old-file",
+    });
+
+    dateSpy.mockReturnValue(now - 1_000);
+    await t.mutation(internal.messages.store, {
+      chatId: 100,
+      messageThreadId: 1,
+      role: "user",
+      text: "[Image] new",
+      userId: 1,
+      imageFileId: "new-file",
+      imageMimeType: "image/png",
+      imageFileSize: 1234,
+    });
+
+    dateSpy.mockReturnValue(now - 500);
+    await t.mutation(internal.messages.store, {
+      chatId: 100,
+      messageThreadId: 1,
+      role: "user",
+      text: "no image",
+      userId: 1,
+    });
+
+    dateSpy.mockRestore();
+
+    const result = await t.query(internal.messages.getRecentImageForUser, {
+      chatId: 100,
+      messageThreadId: 1,
+      userId: 1,
+      since: now - 300_000,
+    });
+
+    expect(result?.imageFileId).toBe("new-file");
+    expect(result?.imageMimeType).toBe("image/png");
+  });
+
+  it("returns null when no recent image exists", async () => {
+    const t = convexTest(schema, modules);
+    const now = 2_000_000;
+    const dateSpy = vi.spyOn(Date, "now");
+    dateSpy.mockReturnValue(now - 600_000);
+    await t.mutation(internal.messages.store, {
+      chatId: 100,
+      messageThreadId: 1,
+      role: "user",
+      text: "[Image] old",
+      userId: 1,
+      imageFileId: "old-file",
+    });
+    dateSpy.mockRestore();
+
+    const result = await t.query(internal.messages.getRecentImageForUser, {
+      chatId: 100,
+      messageThreadId: 1,
+      userId: 1,
+      since: now - 60_000,
+    });
+
+    expect(result).toBeNull();
+  });
+});
+
 describe("messages.ensureChat", () => {
   it("creates a new chat record", async () => {
     const t = convexTest(schema, modules);

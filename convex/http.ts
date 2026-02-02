@@ -18,18 +18,49 @@ import { createLogger } from "./lib/logger";
 interface TelegramUpdate {
   message?: {
     chat: { id: number; type: string; title?: string };
-    from: { id: number; first_name: string; last_name?: string };
+    from: {
+      id: number;
+      first_name: string;
+      last_name?: string;
+      username?: string;
+      is_bot?: boolean;
+    };
     text?: string;
+    caption?: string;
     message_id: number;
     message_thread_id?: number;
+    photo?: {
+      file_id: string;
+      file_unique_id: string;
+      width: number;
+      height: number;
+      file_size?: number;
+    }[];
+    document?: {
+      file_id: string;
+      file_unique_id: string;
+      file_name?: string;
+      mime_type?: string;
+      file_size?: number;
+    };
     reply_to_message?: {
-      from?: { id: number; first_name: string; last_name?: string; is_bot?: boolean };
+      from?: {
+        id: number;
+        first_name: string;
+        last_name?: string;
+        username?: string;
+        is_bot?: boolean;
+      };
       text?: string;
     };
   };
 }
 
 const http = httpRouter();
+
+const IMAGE_QUESTION_PROMPT =
+  "What should I look for in this image? Add a question in the caption or reply with a question.";
+const RECENT_IMAGE_LOOKBACK_MS = 10 * 60 * 1000;
 
 http.route({
   path: "/api/telegram-webhook",
@@ -52,19 +83,49 @@ http.route({
     }
 
     const message = update.message;
-    if (!message?.text) {
+    const hasText = Boolean(message?.text ?? message?.caption);
+    const hasPhoto = Boolean(message?.photo && message.photo.length > 0);
+    const hasImageDoc = Boolean(message?.document?.mime_type?.startsWith("image/"));
+    if (!message || (!hasText && !hasPhoto && !hasImageDoc)) {
       return new Response("OK", { status: 200 });
     }
 
     const chatId = message.chat.id;
     const userId = message.from.id;
     const userName = buildUserName(message.from.first_name, message.from.last_name);
-    const messageText = message.text;
+    const messageText = message.text ?? message.caption ?? "";
     const messageId = message.message_id;
     const chatTitle = message.chat.title;
     const messageThreadId = message.message_thread_id;
     const botUsername = process.env.BOT_USERNAME ?? "";
     const token = requireEnv("TELEGRAM_BOT_TOKEN");
+
+    const photo = message.photo?.[message.photo.length - 1];
+    let image: { fileId: string; mimeType?: string; fileSize?: number } | undefined;
+    if (photo?.file_id) {
+      image = {
+        fileId: photo.file_id,
+        mimeType: "image/jpeg",
+        fileSize: photo.file_size,
+      };
+    } else if (
+      message.document?.mime_type?.startsWith("image/") &&
+      message.document.file_id
+    ) {
+      image = {
+        fileId: message.document.file_id,
+        mimeType: message.document.mime_type,
+        fileSize: message.document.file_size,
+      };
+    }
+
+    const imageFields = image
+      ? {
+          imageFileId: image.fileId,
+          imageMimeType: image.mimeType,
+          imageFileSize: image.fileSize,
+        }
+      : {};
 
     // Compute reply context once (used in both storage paths)
     const replyMsg = message.reply_to_message;
@@ -76,6 +137,11 @@ http.route({
           replyMsg.text,
         )
       : "";
+
+    const cleanText = stripMention(messageText, botUsername);
+    const storedText = image
+      ? `${replyContext}[Image]${cleanText ? ` ${cleanText}` : ""}`
+      : replyContext + cleanText;
 
     const log = createLogger("webhook")
       .set("chatId", chatId)
@@ -101,7 +167,13 @@ http.route({
     }
 
     // 4. Determine if the bot should respond
-    const isReplyToBot = message.reply_to_message?.from?.is_bot === true;
+    const replyUsername = message.reply_to_message?.from?.username;
+    const isReplyToBot =
+      message.reply_to_message?.from?.is_bot === true &&
+      Boolean(replyUsername) &&
+      replyUsername?.toLowerCase() === botUsername.toLowerCase();
+    const isReplyToImagePrompt =
+      isReplyToBot && message.reply_to_message?.text?.trim() === IMAGE_QUESTION_PROMPT;
     if (!shouldRespond(message.chat.type, messageText, botUsername, isReplyToBot)) {
       // Store message for context but don't respond
       await ctx.runMutation(internal.messages.store, {
@@ -110,7 +182,8 @@ http.route({
         userId,
         userName,
         role: "user" as const,
-        text: replyContext + messageText,
+        text: storedText,
+        ...imageFields,
         telegramMessageId: messageId,
       });
       return new Response("OK", { status: 200 });
@@ -163,7 +236,8 @@ http.route({
           userId,
           userName,
           role: "user" as const,
-          text: replyContext + messageText,
+          text: storedText,
+          ...imageFields,
           telegramMessageId: messageId,
         });
 
@@ -187,7 +261,8 @@ http.route({
         userId,
         userName,
         role: "user" as const,
-        text: replyContext + messageText,
+        text: storedText,
+        ...imageFields,
         telegramMessageId: messageId,
       });
       return new Response("OK", { status: 200 });
@@ -210,16 +285,35 @@ http.route({
       return new Response("OK", { status: 200 });
     }
 
-    // 6. Store user message (strip @mention, prepend reply context)
-    const cleanText = replyContext + stripMention(messageText, botUsername);
+    if (image && !cleanText) {
+      await ctx.runMutation(internal.messages.store, {
+        chatId,
+        messageThreadId,
+        userId,
+        userName,
+        role: "user" as const,
+        text: storedText,
+        ...imageFields,
+        telegramMessageId: messageId,
+      });
 
+      await sendMessage(token, chatId, IMAGE_QUESTION_PROMPT, {
+        replyToMessageId: messageId,
+        messageThreadId,
+      });
+      return new Response("OK", { status: 200 });
+    }
+
+    // 6. Store user message (strip @mention, prepend reply context)
+    const cleanTextWithContext = storedText;
     await ctx.runMutation(internal.messages.store, {
       chatId,
       messageThreadId,
       userId,
       userName,
       role: "user" as const,
-      text: cleanText,
+      text: cleanTextWithContext,
+      ...imageFields,
       telegramMessageId: messageId,
     });
 
@@ -228,15 +322,43 @@ http.route({
       chatTitle,
     });
 
+    let imageForRequest = image;
+    if (!imageForRequest && isReplyToImagePrompt) {
+      const recentImage = await ctx.runQuery(internal.messages.getRecentImageForUser, {
+        chatId,
+        messageThreadId,
+        userId,
+        since: Date.now() - RECENT_IMAGE_LOOKBACK_MS,
+      });
+      if (recentImage?.imageFileId) {
+        imageForRequest = {
+          fileId: recentImage.imageFileId,
+          mimeType: recentImage.imageMimeType,
+          fileSize: recentImage.imageFileSize,
+        };
+      }
+    }
+
     // 7. Schedule AI processing (async)
-    await ctx.scheduler.runAfter(0, internal.telegram.processMessage, {
+    const scheduleArgs: {
+      chatId: number;
+      userId: number;
+      userName: string;
+      messageText: string;
+      messageId: number;
+      messageThreadId?: number;
+      image?: { fileId: string; mimeType?: string; fileSize?: number };
+    } = {
       chatId,
       userId,
       userName,
       messageText: cleanText,
       messageId,
       messageThreadId,
-    });
+      ...(imageForRequest ? { image: imageForRequest } : {}),
+    };
+
+    await ctx.scheduler.runAfter(0, internal.telegram.processMessage, scheduleArgs);
 
     log.set("action", "scheduled").info();
     return new Response("OK", { status: 200 });

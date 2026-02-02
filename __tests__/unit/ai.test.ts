@@ -119,6 +119,32 @@ describe("generateResponse", () => {
       ]);
     });
 
+    test("maps image content parts for Claude", async () => {
+      const fetchMock = mockFetch({
+        content: [{ text: "response" }],
+        usage: {},
+      });
+
+      await generateResponse("claude", "key", "model", "prompt", [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Describe this image" },
+            { type: "image", mediaType: "image/jpeg", data: "AQID" },
+          ],
+        },
+      ]);
+
+      const body = getCallBody(fetchMock);
+      expect(body.messages[0].content).toEqual([
+        { type: "text", text: "Describe this image" },
+        {
+          type: "image",
+          source: { type: "base64", media_type: "image/jpeg", data: "AQID" },
+        },
+      ]);
+    });
+
     test("returns parsed response with token counts", async () => {
       mockFetch({
         content: [{ text: "Hello!" }],
@@ -248,6 +274,29 @@ describe("generateResponse", () => {
 
       const [url] = getCallArgs(fetchMock);
       expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    });
+
+    test("maps image content parts for OpenAI-compatible API", async () => {
+      const fetchMock = mockFetch({
+        choices: [{ message: { content: "response" } }],
+        usage: {},
+      });
+
+      await generateResponse("openai", "sk-test", "gpt-4o", "prompt", [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "What's in this?" },
+            { type: "image", mediaType: "image/png", data: "AQID" },
+          ],
+        },
+      ]);
+
+      const body = getCallBody(fetchMock);
+      expect(body.messages[1].content).toEqual([
+        { type: "text", text: "What's in this?" },
+        { type: "image_url", image_url: { url: "data:image/png;base64,AQID" } },
+      ]);
     });
   });
 

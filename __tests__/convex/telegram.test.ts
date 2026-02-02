@@ -19,6 +19,26 @@ function mockFetchForAI(aiResponseText: string, inputTokens = 10, outputTokens =
       const body = init?.body ? JSON.parse(init.body as string) : undefined;
       calls.push({ url, body });
 
+      if (url.includes("/getFile")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            result: { file_path: "photos/file.jpg", file_size: 3 },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url.includes("api.telegram.org/file/bot")) {
+        return new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { "Content-Type": "image/png" },
+        });
+      }
+
       // Telegram API calls (sendChatAction, sendMessage)
       if (url.includes("api.telegram.org")) {
         return new Response(JSON.stringify({ ok: true, result: {} }), {
@@ -253,6 +273,39 @@ describe("processMessage", () => {
     );
   });
 
+  it("includes image content when image metadata is provided", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.messages.store, {
+      chatId: 100,
+      role: "user",
+      text: "[Image] what is this",
+      userId: 1,
+      userName: "Alice",
+      telegramMessageId: 42,
+    });
+
+    const calls = mockFetchForAI("Looks like a test image.");
+
+    await t.action(internal.telegram.processMessage, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      messageText: "what is this",
+      messageId: 42,
+      image: { fileId: "file-123", mimeType: "image/png" },
+    });
+
+    const aiCalls = calls.filter((c) => c.url.includes("chat/completions"));
+    expect(aiCalls).toHaveLength(1);
+    const body = aiCalls[0]!.body as Record<string, unknown>;
+    const messages = body.messages as Array<{ role: string; content: unknown }>;
+    const userMessage = messages[1] as { content: unknown };
+    expect(userMessage.content).toEqual([
+      { type: "text", text: "[Alice]: [Image] what is this" },
+      { type: "image_url", image_url: { url: "data:image/png;base64,AQID" } },
+    ]);
+  });
+
   it("uses chat config system prompt when available", async () => {
     const t = convexTest(schema, modules);
     // Create a chat with custom system prompt
@@ -288,10 +341,9 @@ describe("processMessage", () => {
     const aiCall = calls.find((c) => c.url.includes("chat/completions"));
     const body = aiCall?.body as Record<string, unknown>;
     const messages = body.messages as Array<{ role: string; content: string }>;
-    expect(messages[0]).toMatchObject({
-      role: "system",
-      content: "You are a helpful pirate.",
-    });
+    expect(messages[0]?.role).toBe("system");
+    expect(String(messages[0]?.content)).toContain("You are a helpful pirate.");
+    expect(String(messages[0]?.content)).toContain("Reply only to the most recent");
   });
 
   it("uses custom maxContextMessages from chat config", async () => {

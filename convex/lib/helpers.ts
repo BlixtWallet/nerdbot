@@ -69,7 +69,7 @@ export interface ConversationInput {
 
 export function formatConversation(
   messages: ConversationInput[],
-): { role: "user" | "assistant"; content: string }[] {
+): { role: "user" | "assistant"; content: string | ContentPart[] }[] {
   return messages.map((msg) => ({
     role: msg.role as "user" | "assistant",
     content:
@@ -176,3 +176,4 @@ export function evaluateRateLimit(
     insert: null,
   };
 }
+import type { ContentPart } from "./ai";

@@ -10,9 +10,13 @@ export default defineSchema({
     role: v.union(v.literal("user"), v.literal("assistant")),
     text: v.string(),
     telegramMessageId: v.optional(v.number()),
+    imageFileId: v.optional(v.string()),
+    imageMimeType: v.optional(v.string()),
+    imageFileSize: v.optional(v.number()),
     timestamp: v.number(),
   })
     .index("by_chat", ["chatId", "messageThreadId", "timestamp"])
+    .index("by_chat_user_thread", ["chatId", "messageThreadId", "userId", "timestamp"])
     .index("by_chat_recent", ["chatId", "messageThreadId"]),
 
   chats: defineTable({

@@ -1,5 +1,11 @@
 import { test, expect, describe, afterEach, mock } from "bun:test";
-import { sendMessage, sendChatAction, setWebhook } from "../../convex/lib/telegramApi";
+import {
+  downloadTelegramFile,
+  getFile,
+  sendChatAction,
+  sendMessage,
+  setWebhook,
+} from "../../convex/lib/telegramApi";
 
 const originalFetch = globalThis.fetch;
 
@@ -14,6 +20,27 @@ function mockFetchOk(responseBody: unknown = { ok: true }) {
       status: 200,
       json: () => Promise.resolve(responseBody),
       text: () => Promise.resolve(JSON.stringify(responseBody)),
+    } as Response),
+  );
+  globalThis.fetch = fn as unknown as typeof fetch;
+  return fn;
+}
+
+function mockFetchBinary(content: Uint8Array, contentType = "image/jpeg") {
+  const fn = mock(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": contentType }),
+      arrayBuffer: () =>
+        Promise.resolve(
+          content.buffer.slice(
+            content.byteOffset,
+            content.byteOffset + content.byteLength,
+          ),
+        ),
+      text: () => Promise.resolve(""),
+      json: () => Promise.resolve({}),
     } as Response),
   );
   globalThis.fetch = fn as unknown as typeof fetch;
@@ -169,5 +196,36 @@ describe("setWebhook", () => {
     expect(body.secret_token).toBe("secret123");
     expect(body.allowed_updates).toEqual(["message"]);
     expect(result).toEqual({ ok: true, result: true });
+  });
+});
+
+describe("getFile", () => {
+  test("calls getFile API and returns file info", async () => {
+    const fetchMock = mockFetchOk({
+      ok: true,
+      result: { file_path: "photos/file.jpg", file_size: 1234 },
+    });
+
+    const result = await getFile("TOKEN123", "file-id");
+
+    const [url] = getCallArgs(fetchMock);
+    expect(url).toBe("https://api.telegram.org/botTOKEN123/getFile");
+    const body = getCallBody(fetchMock);
+    expect(body.file_id).toBe("file-id");
+    expect(result).toEqual({ file_path: "photos/file.jpg", file_size: 1234 });
+  });
+});
+
+describe("downloadTelegramFile", () => {
+  test("downloads file bytes and content type", async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const fetchMock = mockFetchBinary(bytes, "image/png");
+
+    const result = await downloadTelegramFile("TOKEN123", "photos/file.jpg");
+
+    const [url] = getCallArgs(fetchMock);
+    expect(url).toBe("https://api.telegram.org/file/botTOKEN123/photos/file.jpg");
+    expect(Array.from(result.bytes)).toEqual([1, 2, 3]);
+    expect(result.contentType).toBe("image/png");
   });
 });
