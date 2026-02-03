@@ -90,6 +90,7 @@ Set via `bunx convex env set <KEY> <VALUE>`:
 | `AI_API_KEY`              | API key for chosen provider                                                                                                                                                            |
 | `AI_MODEL`                | e.g. `"kimi-k2-0711-preview"`, `"claude-sonnet-4-20250514"`, `"gpt-4o"`, `"grok-4-1-fast-reasoning"`                                                                                   |
 | `AI_THINKING`             | `"disabled"`, `"enabled"`, or `"auto"` thinking mode for Moonshot (default: `"disabled"`). Ignored by other providers.                                                                 |
+| `OPENAI_BASE_URL`         | Override the OpenAI base URL (default: `https://api.openai.com/v1`). Include `/v1` if your proxy requires it.                                                                          |
 | `BOT_USERNAME`            | `nerdbot` (without @)                                                                                                                                                                  |
 | `RATE_LIMIT_PER_MINUTE`   | Max messages per user per group per minute (default: `10`)                                                                                                                             |
 | `ALLOWED_USER_IDS`        | Comma-separated Telegram user IDs allowed to use the bot. **Required** — bot blocks everyone if not set                                                                                |

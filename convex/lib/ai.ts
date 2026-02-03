@@ -114,6 +114,40 @@ function hasImage(messages: ConversationMessage[]): boolean {
   );
 }
 
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+
+function normalizeBaseUrl(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function getOpenAIBaseUrl(): string {
+  const value = process.env.OPENAI_BASE_URL;
+  if (!value) {
+    return DEFAULT_OPENAI_BASE_URL;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return DEFAULT_OPENAI_BASE_URL;
+  }
+
+  return normalizeBaseUrl(trimmed);
+}
+
+function joinUrl(baseUrl: string, path: string): string {
+  const normalizedBase = normalizeBaseUrl(baseUrl);
+  const normalizedPath = path.replace(/^\/+/, "");
+  return `${normalizedBase}/${normalizedPath}`;
+}
+
+function getOpenAIChatCompletionsUrl(): string {
+  return joinUrl(getOpenAIBaseUrl(), "chat/completions");
+}
+
+function getOpenAIResponsesUrl(): string {
+  return joinUrl(getOpenAIBaseUrl(), "responses");
+}
+
 async function callClaude(
   apiKey: string,
   model: string,
@@ -170,7 +204,6 @@ async function callClaude(
 }
 
 const OPENAI_COMPATIBLE_ENDPOINTS: Record<string, string> = {
-  openai: "https://api.openai.com/v1/chat/completions",
   moonshot: "https://api.moonshot.ai/v1/chat/completions",
   grok: "https://api.x.ai/v1/chat/completions",
 };
@@ -183,7 +216,10 @@ async function callOpenAICompatible(
   messages: ConversationMessage[],
   thinking?: ThinkingMode,
 ): Promise<AIResponse> {
-  const url = OPENAI_COMPATIBLE_ENDPOINTS[provider];
+  const url =
+    provider === "openai"
+      ? getOpenAIChatCompletionsUrl()
+      : OPENAI_COMPATIBLE_ENDPOINTS[provider];
   if (!url) {
     throw new Error(`No endpoint configured for provider: ${provider}`);
   }
@@ -343,7 +379,6 @@ async function callMoonshotWithSearch(
 }
 
 const RESPONSES_API_ENDPOINTS: Record<string, string> = {
-  openai: "https://api.openai.com/v1/responses",
   grok: "https://api.x.ai/v1/responses",
 };
 
@@ -354,7 +389,8 @@ async function callResponsesAPIWithSearch(
   systemPrompt: string,
   messages: ConversationMessage[],
 ): Promise<AIResponse> {
-  const url = RESPONSES_API_ENDPOINTS[provider];
+  const url =
+    provider === "openai" ? getOpenAIResponsesUrl() : RESPONSES_API_ENDPOINTS[provider];
   if (!url) {
     throw new Error(`No Responses API endpoint configured for provider: ${provider}`);
   }
