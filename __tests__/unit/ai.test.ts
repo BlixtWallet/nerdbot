@@ -66,6 +66,24 @@ function getNthCallBody(fn: ReturnType<typeof mock>, n: number) {
   return JSON.parse(options.body as string);
 }
 
+async function withEnv(
+  name: string,
+  value: string,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const previous = process.env[name];
+  process.env[name] = value;
+  try {
+    await fn();
+  } finally {
+    if (previous === undefined) {
+      delete process.env[name];
+    } else {
+      process.env[name] = previous;
+    }
+  }
+}
+
 describe("generateResponse", () => {
   test("throws on unknown provider", async () => {
     expect(generateResponse("unknown", "key", "model", "prompt", [])).rejects.toThrow(
@@ -274,6 +292,22 @@ describe("generateResponse", () => {
 
       const [url] = getCallArgs(fetchMock);
       expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    });
+
+    test("respects OPENAI_BASE_URL override", async () => {
+      const fetchMock = mockFetch({
+        choices: [{ message: { content: "Hello from proxy" } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      });
+
+      await withEnv("OPENAI_BASE_URL", "https://openai.proxy/v1/", async () => {
+        await generateResponse("openai", "sk-test", "gpt-4o", "prompt", [
+          { role: "user", content: "Hi" },
+        ]);
+      });
+
+      const [url] = getCallArgs(fetchMock);
+      expect(url).toBe("https://openai.proxy/v1/chat/completions");
     });
 
     test("maps image content parts for OpenAI-compatible API", async () => {
@@ -584,6 +618,33 @@ describe("generateResponse", () => {
 
       const [url] = getCallArgs(fetchMock);
       expect(url).toBe("https://api.openai.com/v1/responses");
+    });
+
+    test("uses OPENAI_BASE_URL for Responses API", async () => {
+      const fetchMock = mockFetch({
+        id: "resp_456",
+        output: [
+          {
+            type: "message",
+            content: [{ type: "output_text", text: "Proxy response" }],
+          },
+        ],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      });
+
+      await withEnv("OPENAI_BASE_URL", "https://openai.proxy/v1", async () => {
+        await generateResponse(
+          "openai",
+          "key",
+          "model",
+          "prompt",
+          [{ role: "user", content: "search this" }],
+          { webSearch: true },
+        );
+      });
+
+      const [url] = getCallArgs(fetchMock);
+      expect(url).toBe("https://openai.proxy/v1/responses");
     });
 
     test("sends correct request body with tools and store:false", async () => {
