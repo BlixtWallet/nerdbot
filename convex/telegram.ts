@@ -1,7 +1,7 @@
 import { action, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
-import { generateResponse } from "./lib/ai";
+import { generateResponse, supportsImages } from "./lib/ai";
 import type { ContentPart } from "./lib/ai";
 import {
   downloadTelegramFile,
@@ -40,7 +40,7 @@ const IMAGE_TOO_LARGE_MESSAGE =
   "That image is too large to process. Please upload a smaller image (max 5MB).";
 
 const IMAGE_UNSUPPORTED_MESSAGE =
-  "Image understanding isn't supported with the current AI provider/model. Try a different model or ask a text-only question.";
+  "Image understanding isn't supported with the current AI provider/model. Switch to a vision-capable model/provider or ask a text-only question.";
 
 const IMAGE_DOWNLOAD_FAILED_MESSAGE =
   "I couldn't download that image. Please try again or re-upload it.";
@@ -139,6 +139,15 @@ export const processMessage = internalAction({
       .set("model", aiModel);
 
     try {
+      if (args.image && !supportsImages(aiProvider, aiModel)) {
+        await sendMessage(token, args.chatId, IMAGE_UNSUPPORTED_MESSAGE, {
+          replyToMessageId: args.messageId,
+          messageThreadId: args.messageThreadId,
+        });
+        log.set("action", "image_unsupported").info();
+        return;
+      }
+
       await sendChatAction(token, args.chatId, "typing", args.messageThreadId);
 
       const chatConfig = await ctx.runQuery(internal.messages.getChat, {

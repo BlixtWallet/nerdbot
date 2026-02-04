@@ -52,6 +52,20 @@ interface TelegramUpdate {
         is_bot?: boolean;
       };
       text?: string;
+      photo?: {
+        file_id: string;
+        file_unique_id: string;
+        width: number;
+        height: number;
+        file_size?: number;
+      }[];
+      document?: {
+        file_id: string;
+        file_unique_id: string;
+        file_name?: string;
+        mime_type?: string;
+        file_size?: number;
+      };
     };
   };
 }
@@ -173,8 +187,15 @@ http.route({
       Boolean(replyUsername) &&
       replyUsername?.toLowerCase() === botUsername.toLowerCase();
     const isReplyToImagePrompt =
-      isReplyToBot && message.reply_to_message?.text?.trim() === IMAGE_QUESTION_PROMPT;
-    if (!shouldRespond(message.chat.type, messageText, botUsername, isReplyToBot)) {
+      message.reply_to_message?.text?.trim() === IMAGE_QUESTION_PROMPT;
+    if (
+      !shouldRespond(
+        message.chat.type,
+        messageText,
+        botUsername,
+        isReplyToBot || isReplyToImagePrompt,
+      )
+    ) {
       // Store message for context but don't respond
       await ctx.runMutation(internal.messages.store, {
         chatId,
@@ -322,20 +343,47 @@ http.route({
       chatTitle,
     });
 
-    let imageForRequest = image;
-    if (!imageForRequest && isReplyToImagePrompt) {
-      const recentImage = await ctx.runQuery(internal.messages.getRecentImageForUser, {
-        chatId,
-        messageThreadId,
-        userId,
-        since: Date.now() - RECENT_IMAGE_LOOKBACK_MS,
-      });
-      if (recentImage?.imageFileId) {
-        imageForRequest = {
-          fileId: recentImage.imageFileId,
-          mimeType: recentImage.imageMimeType,
-          fileSize: recentImage.imageFileSize,
-        };
+    const replyPhotos = message.reply_to_message?.photo;
+    const replyPhoto =
+      replyPhotos && replyPhotos.length > 0
+        ? replyPhotos[replyPhotos.length - 1]
+        : undefined;
+    let replyImage: { fileId: string; mimeType?: string; fileSize?: number } | undefined;
+    if (replyPhoto?.file_id) {
+      replyImage = {
+        fileId: replyPhoto.file_id,
+        mimeType: "image/jpeg",
+        fileSize: replyPhoto.file_size,
+      };
+    } else if (
+      message.reply_to_message?.document?.mime_type?.startsWith("image/") &&
+      message.reply_to_message.document.file_id
+    ) {
+      replyImage = {
+        fileId: message.reply_to_message.document.file_id,
+        mimeType: message.reply_to_message.document.mime_type,
+        fileSize: message.reply_to_message.document.file_size,
+      };
+    }
+
+    let imageForRequest = image ?? replyImage;
+    if (!imageForRequest) {
+      const shouldAttachRecentImage =
+        isReplyToImagePrompt || (isPrivate && cleanText.length > 0);
+      if (shouldAttachRecentImage) {
+        const recentImage = await ctx.runQuery(internal.messages.getRecentImageForUser, {
+          chatId,
+          messageThreadId,
+          userId,
+          since: Date.now() - RECENT_IMAGE_LOOKBACK_MS,
+        });
+        if (recentImage?.imageFileId) {
+          imageForRequest = {
+            fileId: recentImage.imageFileId,
+            mimeType: recentImage.imageMimeType,
+            fileSize: recentImage.imageFileSize,
+          };
+        }
       }
     }
 

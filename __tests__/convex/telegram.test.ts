@@ -274,6 +274,8 @@ describe("processMessage", () => {
   });
 
   it("includes image content when image metadata is provided", async () => {
+    vi.stubEnv("AI_PROVIDER", "openai");
+    vi.stubEnv("AI_MODEL", "gpt-4o");
     const t = convexTest(schema, modules);
     await t.mutation(internal.messages.store, {
       chatId: 100,
@@ -304,6 +306,28 @@ describe("processMessage", () => {
       { type: "text", text: "[Alice]: [Image] what is this" },
       { type: "image_url", image_url: { url: "data:image/png;base64,AQID" } },
     ]);
+  });
+
+  it("replies with unsupported message when provider lacks image support", async () => {
+    const t = convexTest(schema, modules);
+    const calls = mockFetchForAI("Should not be called.");
+
+    await t.action(internal.telegram.processMessage, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      messageText: "what is this",
+      messageId: 99,
+      image: { fileId: "file-123", mimeType: "image/png" },
+    });
+
+    const aiCalls = calls.filter((c) => c.url.includes("chat/completions"));
+    expect(aiCalls).toHaveLength(0);
+    const sendCalls = calls.filter((c) => c.url.includes("/sendMessage"));
+    expect(sendCalls).toHaveLength(1);
+    expect((sendCalls[0]!.body as Record<string, unknown>).text).toContain(
+      "Image understanding isn't supported",
+    );
   });
 
   it("uses chat config system prompt when available", async () => {

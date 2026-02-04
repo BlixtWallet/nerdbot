@@ -148,6 +148,21 @@ function getOpenAIResponsesUrl(): string {
   return joinUrl(getOpenAIBaseUrl(), "responses");
 }
 
+export function supportsImages(provider: string, model: string): boolean {
+  const normalizedProvider = provider.trim().toLowerCase();
+  if (normalizedProvider !== "moonshot") {
+    return true;
+  }
+
+  const normalizedModel = model.trim().toLowerCase();
+  return (
+    normalizedModel.includes("vision") ||
+    normalizedModel.includes("vl") ||
+    normalizedModel.includes("image") ||
+    normalizedModel.includes("multimodal")
+  );
+}
+
 async function callClaude(
   apiKey: string,
   model: string,
