@@ -61,6 +61,56 @@ export function truncateResponse(text: string, maxLength = 4000): string {
   return text;
 }
 
+const CODE_FENCE_PATTERN = /```([^`\r\n]*)[ \t]*\r?\n([\s\S]*?)```/g;
+
+function escapeTelegramHtml(text: string): string {
+  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function sanitizeLanguageToken(rawLanguage: string | undefined): string | null {
+  if (!rawLanguage) return null;
+  const token = rawLanguage.trim().split(/\s+/)[0] ?? "";
+  if (!token) return null;
+
+  const sanitized = token.replace(/[^a-zA-Z0-9_+.#-]/g, "").toLowerCase();
+  return sanitized.length > 0 ? sanitized : null;
+}
+
+export interface TelegramFormattedMessage {
+  text: string;
+  parseMode?: "HTML";
+}
+
+export function formatTelegramResponse(text: string): TelegramFormattedMessage {
+  let hasCodeFence = false;
+  let lastIndex = 0;
+  let formatted = "";
+
+  for (const match of text.matchAll(CODE_FENCE_PATTERN)) {
+    const index = match.index;
+    if (typeof index !== "number") continue;
+
+    hasCodeFence = true;
+    formatted += escapeTelegramHtml(text.slice(lastIndex, index));
+
+    const language = sanitizeLanguageToken(match[1]);
+    const code = typeof match[2] === "string" ? match[2] : "";
+    const escapedCode = escapeTelegramHtml(code);
+    formatted += language
+      ? `<pre><code class="language-${language}">${escapedCode}</code></pre>`
+      : `<pre><code>${escapedCode}</code></pre>`;
+
+    lastIndex = index + match[0].length;
+  }
+
+  if (!hasCodeFence) {
+    return { text };
+  }
+
+  formatted += escapeTelegramHtml(text.slice(lastIndex));
+  return { text: formatted, parseMode: "HTML" };
+}
+
 export interface ConversationInput {
   role: string;
   userName?: string;

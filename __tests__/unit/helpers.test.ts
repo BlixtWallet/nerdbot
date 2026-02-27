@@ -9,6 +9,7 @@ import {
   formatReplyContext,
   stripCitations,
   truncateResponse,
+  formatTelegramResponse,
   formatConversation,
   evaluateRateLimit,
   validateSystemPrompt,
@@ -241,6 +242,41 @@ describe("truncateResponse", () => {
 
   test("returns empty string unchanged", () => {
     expect(truncateResponse("")).toBe("");
+  });
+});
+
+describe("formatTelegramResponse", () => {
+  test("returns plain text unchanged when no code fences are present", () => {
+    expect(formatTelegramResponse("Hello world")).toEqual({ text: "Hello world" });
+  });
+
+  test("converts fenced code blocks to Telegram HTML with language class", () => {
+    const input = "Try this:\n```ts\nconst x = 1;\n```\nDone.";
+    const result = formatTelegramResponse(input);
+    expect(result.parseMode).toBe("HTML");
+    expect(result.text).toContain('<pre><code class="language-ts">');
+    expect(result.text).toContain("const x = 1;");
+  });
+
+  test("converts unlabeled fenced code blocks without language class", () => {
+    const input = "```\\nconsole.log('hi')\\n```".replace(/\\n/g, "\n");
+    const result = formatTelegramResponse(input);
+    expect(result.parseMode).toBe("HTML");
+    expect(result.text).toContain("<pre><code>");
+    expect(result.text).not.toContain("language-");
+  });
+
+  test("escapes HTML outside and inside code blocks", () => {
+    const input = "A < B\n```html\n<div>&</div>\n```";
+    const result = formatTelegramResponse(input);
+    expect(result.text).toContain("A &lt; B");
+    expect(result.text).toContain("&lt;div&gt;&amp;&lt;/div&gt;");
+  });
+
+  test("sanitizes invalid language tokens", () => {
+    const input = "```python;alert(1)\nprint('x')\n```";
+    const result = formatTelegramResponse(input);
+    expect(result.text).toContain('<code class="language-pythonalert1">');
   });
 });
 

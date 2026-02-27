@@ -273,6 +273,40 @@ describe("processMessage", () => {
     );
   });
 
+  it("formats fenced code blocks for Telegram syntax highlighting", async () => {
+    const t = convexTest(schema, modules);
+    await t.mutation(internal.messages.store, {
+      chatId: 100,
+      role: "user",
+      text: "show me code",
+      userId: 1,
+      userName: "Alice",
+    });
+
+    const aiText = "Here is code:\n```ts\nconst answer = 42;\n```\nDone.";
+    const calls = mockFetchForAI(aiText);
+
+    await t.action(internal.telegram.processMessage, {
+      chatId: 100,
+      userId: 1,
+      userName: "Alice",
+      messageText: "show me code",
+      messageId: 2,
+    });
+
+    const sendCall = calls.find((c) => c.url.includes("/sendMessage"));
+    const body = sendCall?.body as Record<string, unknown>;
+    expect(body.parse_mode).toBe("HTML");
+    expect(body.text).toContain('<pre><code class="language-ts">');
+    expect(body.text).toContain("const answer = 42;");
+
+    const messages = await t.query(internal.messages.getRecent, {
+      chatId: 100,
+    });
+    const assistantMessages = messages.filter((m) => m.role === "assistant");
+    expect(assistantMessages[0]!.text).toBe(aiText);
+  });
+
   it("includes image content when image metadata is provided", async () => {
     vi.stubEnv("AI_PROVIDER", "openai");
     vi.stubEnv("AI_MODEL", "gpt-4o");
