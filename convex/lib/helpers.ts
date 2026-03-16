@@ -93,10 +93,11 @@ function formatInlineCodeSegments(text: string): {
   for (const match of text.matchAll(INLINE_CODE_PATTERN)) {
     const index = match.index;
     if (typeof index !== "number") continue;
+    const [, inlineCode = ""] = match;
 
     hasInlineCode = true;
     formatted += escapeTelegramHtml(text.slice(lastIndex, index));
-    formatted += `<code>${escapeTelegramHtml(match[1] ?? "")}</code>`;
+    formatted += `<code>${escapeTelegramHtml(inlineCode)}</code>`;
     lastIndex = index + match[0].length;
   }
 
@@ -120,7 +121,6 @@ export function formatTelegramResponse(text: string): TelegramFormattedMessage {
     hasFormatting = true;
     const beforeFence = formatInlineCodeSegments(text.slice(lastIndex, index));
     formatted += beforeFence.formatted;
-    hasFormatting = hasFormatting || beforeFence.hasInlineCode;
 
     const language = sanitizeLanguageToken(match[1]);
     const code = typeof match[2] === "string" ? match[2] : "";
