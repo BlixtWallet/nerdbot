@@ -250,6 +250,20 @@ describe("formatTelegramResponse", () => {
     expect(formatTelegramResponse("Hello world")).toEqual({ text: "Hello world" });
   });
 
+  test("converts inline code spans to Telegram HTML", () => {
+    const result = formatTelegramResponse("Use `bun test` here.");
+    expect(result).toEqual({
+      text: "Use <code>bun test</code> here.",
+      parseMode: "HTML",
+    });
+  });
+
+  test("converts multiple inline code spans in one message", () => {
+    const result = formatTelegramResponse("Compare `tailscale` with `caddy`.");
+    expect(result.text).toBe("Compare <code>tailscale</code> with <code>caddy</code>.");
+    expect(result.parseMode).toBe("HTML");
+  });
+
   test("converts fenced code blocks to Telegram HTML with language class", () => {
     const input = "Try this:\n```ts\nconst x = 1;\n```\nDone.";
     const result = formatTelegramResponse(input);
@@ -273,10 +287,37 @@ describe("formatTelegramResponse", () => {
     expect(result.text).toContain("&lt;div&gt;&amp;&lt;/div&gt;");
   });
 
+  test("escapes HTML outside and inside inline code", () => {
+    const result = formatTelegramResponse("A < B and `<tag>&value`.");
+    expect(result.text).toBe("A &lt; B and <code>&lt;tag&gt;&amp;value</code>.");
+    expect(result.parseMode).toBe("HTML");
+  });
+
+  test("supports inline code around fenced blocks", () => {
+    const input = "Use `bun test`.\n```ts\nconst x = 1;\n```\nThen `bun run check`.";
+    const result = formatTelegramResponse(input);
+    expect(result.parseMode).toBe("HTML");
+    expect(result.text).toContain("Use <code>bun test</code>.");
+    expect(result.text).toContain('<pre><code class="language-ts">');
+    expect(result.text).toContain("Then <code>bun run check</code>.");
+  });
+
   test("sanitizes invalid language tokens", () => {
     const input = "```python;alert(1)\nprint('x')\n```";
     const result = formatTelegramResponse(input);
     expect(result.text).toContain('<code class="language-pythonalert1">');
+  });
+
+  test("leaves unmatched inline backticks as plain text", () => {
+    expect(formatTelegramResponse("Use `bun test here.")).toEqual({
+      text: "Use `bun test here.",
+    });
+  });
+
+  test("does not treat double backticks as a special syntax", () => {
+    expect(formatTelegramResponse("``tailscale``")).toEqual({
+      text: "``tailscale``",
+    });
   });
 });
 

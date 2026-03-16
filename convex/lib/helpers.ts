@@ -62,6 +62,7 @@ export function truncateResponse(text: string, maxLength = 4000): string {
 }
 
 const CODE_FENCE_PATTERN = /```([^`\r\n]*)[ \t]*\r?\n([\s\S]*?)```/g;
+const INLINE_CODE_PATTERN = /(?<!`)`([^`\r\n]+?)`(?!`)/g;
 
 function escapeTelegramHtml(text: string): string {
   return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -81,8 +82,34 @@ export interface TelegramFormattedMessage {
   parseMode?: "HTML";
 }
 
+function formatInlineCodeSegments(text: string): {
+  formatted: string;
+  hasInlineCode: boolean;
+} {
+  let hasInlineCode = false;
+  let lastIndex = 0;
+  let formatted = "";
+
+  for (const match of text.matchAll(INLINE_CODE_PATTERN)) {
+    const index = match.index;
+    if (typeof index !== "number") continue;
+
+    hasInlineCode = true;
+    formatted += escapeTelegramHtml(text.slice(lastIndex, index));
+    formatted += `<code>${escapeTelegramHtml(match[1] ?? "")}</code>`;
+    lastIndex = index + match[0].length;
+  }
+
+  if (!hasInlineCode) {
+    return { formatted: escapeTelegramHtml(text), hasInlineCode: false };
+  }
+
+  formatted += escapeTelegramHtml(text.slice(lastIndex));
+  return { formatted, hasInlineCode: true };
+}
+
 export function formatTelegramResponse(text: string): TelegramFormattedMessage {
-  let hasCodeFence = false;
+  let hasFormatting = false;
   let lastIndex = 0;
   let formatted = "";
 
@@ -90,8 +117,10 @@ export function formatTelegramResponse(text: string): TelegramFormattedMessage {
     const index = match.index;
     if (typeof index !== "number") continue;
 
-    hasCodeFence = true;
-    formatted += escapeTelegramHtml(text.slice(lastIndex, index));
+    hasFormatting = true;
+    const beforeFence = formatInlineCodeSegments(text.slice(lastIndex, index));
+    formatted += beforeFence.formatted;
+    hasFormatting = hasFormatting || beforeFence.hasInlineCode;
 
     const language = sanitizeLanguageToken(match[1]);
     const code = typeof match[2] === "string" ? match[2] : "";
@@ -103,11 +132,17 @@ export function formatTelegramResponse(text: string): TelegramFormattedMessage {
     lastIndex = index + match[0].length;
   }
 
-  if (!hasCodeFence) {
+  if (!hasFormatting) {
+    const inlineCode = formatInlineCodeSegments(text);
+    if (inlineCode.hasInlineCode) {
+      return { text: inlineCode.formatted, parseMode: "HTML" };
+    }
+
     return { text };
   }
 
-  formatted += escapeTelegramHtml(text.slice(lastIndex));
+  const remaining = formatInlineCodeSegments(text.slice(lastIndex));
+  formatted += remaining.formatted;
   return { text: formatted, parseMode: "HTML" };
 }
 
